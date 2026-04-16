@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "hono": "npm:hono",
+    "hono/cors": "npm:hono/cors",
+    "hono/logger": "npm:hono/logger",
+    "supabase": "npm:@supabase/supabase-js"
+  },
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env ./index.tsx"
+  }
+}
