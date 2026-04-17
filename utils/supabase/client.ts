@@ -7,8 +7,17 @@ const importMetaEnv = (import.meta as ImportMeta & {
   };
 }).env;
 
-const supabaseUrl = importMetaEnv?.VITE_SUPABASE_URL || "https://tylovgteozoxgztbkvbb.supabase.co";
-const supabaseAnonKey = importMetaEnv?.VITE_SUPABASE_ANON_KEY || "sb_publishable_DfKqcqvy87KiIFQFJcv94A_zdxflf7K";
+const supabaseUrl = importMetaEnv?.VITE_SUPABASE_URL?.trim();
+const supabaseAnonKey = importMetaEnv?.VITE_SUPABASE_ANON_KEY?.trim();
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("Supabase env tidak lengkap. Set VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY.");
+}
+
+if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl)) {
+  console.warn("VITE_SUPABASE_URL format tidak valid:", supabaseUrl);
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export interface Kelas { id: string; nama_kelas?: string; tingkat: string; wali_kelas: string; kelas?: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }

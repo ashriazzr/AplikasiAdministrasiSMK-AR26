@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { checkDatabaseHealth, getDatabaseStats, seedTestData, resetDatabase } from "@/utils/supabase/init";
+import { projectId, supabaseUrl } from "@/utils/supabase/info";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -122,11 +123,11 @@ export default function DatabaseSetup() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-100 p-4 rounded-lg">
                 <p className="text-sm font-semibold text-slate-600">Project ID</p>
-                <p className="text-sm text-slate-900 break-all">tylovgteozoxgztbkvbb</p>
+                <p className="text-sm text-slate-900 break-all">{projectId || "Belum diset"}</p>
               </div>
               <div className="bg-slate-100 p-4 rounded-lg">
                 <p className="text-sm font-semibold text-slate-600">URL</p>
-                <p className="text-sm text-slate-900 break-all">https://tylovgteozoxgztbkvbb.supabase.co</p>
+                <p className="text-sm text-slate-900 break-all">{supabaseUrl || "Belum diset"}</p>
               </div>
             </div>
           </CardContent>
