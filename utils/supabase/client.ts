@@ -9,16 +9,49 @@ const importMetaEnv = (import.meta as ImportMeta & {
 
 const supabaseUrl = importMetaEnv?.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = importMetaEnv?.VITE_SUPABASE_ANON_KEY?.trim();
+const supabaseConfigError = "Supabase env tidak lengkap. Set VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY.";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error("Supabase env tidak lengkap. Set VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY.");
-}
+const createSupabaseErrorResult = () => ({
+  data: null,
+  error: new Error(supabaseConfigError),
+});
 
-if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl)) {
+const createSupabaseNoopQuery = () => {
+  const queryState: any = {};
+
+  const query = new Proxy(queryState, {
+    get(_target, property) {
+      if (property === "then") {
+        return (resolve: (value: unknown) => void) => resolve(createSupabaseErrorResult());
+      }
+
+      if (property === "catch" || property === "finally") {
+        return () => query;
+      }
+
+      return (..._args: unknown[]) => query;
+    },
+  });
+
+  return query;
+};
+
+const createSupabaseNoopClient = () => ({
+  from: () => createSupabaseNoopQuery(),
+  rpc: () => Promise.resolve(createSupabaseErrorResult()),
+});
+
+if (supabaseUrl && supabaseAnonKey && !/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl)) {
   console.warn("VITE_SUPABASE_URL format tidak valid:", supabaseUrl);
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : (createSupabaseNoopClient() as ReturnType<typeof createClient>);
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const supabaseConfigErrorMessage = supabaseConfigError;
 
 export interface Kelas { id: string; nama_kelas?: string; tingkat: string; wali_kelas: string; kelas?: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
 export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; created_at: string; updated_at: string; }
