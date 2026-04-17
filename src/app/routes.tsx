@@ -36,4 +36,6 @@ export const router = createBrowserRouter([
       { path: "rombel", Component: Rombel },
     ],
   },
-]);
+], {
+  basename: import.meta.env.BASE_URL,
+});
