@@ -99,7 +99,7 @@ export default function Tagihan() {
   const [jumlahBayar,      setJumlahBayar]      = useState("");
   const [keterangan,       setKeterangan]       = useState("");
   const [tanggalBayar,     setTanggalBayar]     = useState(new Date().toISOString().split("T")[0]);
-  const [metodePembayaran, setMetodePembayaran] = useState("transfer");
+  const [metodePembayaran, setMetodePembayaran] = useState("tunai");
 
   /* pagination */
   const tagihanPag    = usePaginate(tagihanList);
@@ -155,13 +155,13 @@ export default function Tagihan() {
       setJumlahBayar(String(pembayaran.jumlah ?? ""));
       setKeterangan(pembayaran.bukti_pembayaran ?? "");
       setTanggalBayar(pembayaran.tanggal_pembayaran ? pembayaran.tanggal_pembayaran.split("T")[0] : new Date().toISOString().split("T")[0]);
-      setMetodePembayaran(pembayaran.metode_pembayaran ?? "transfer");
+      setMetodePembayaran(pembayaran.metode_pembayaran ?? "tunai");
     } else {
       setEditingPembayaran(null);
       setJumlahBayar(sisaBayar > 0 ? String(sisaBayar) : "");
       setKeterangan("");
       setTanggalBayar(new Date().toISOString().split("T")[0]);
-      setMetodePembayaran("transfer");
+      setMetodePembayaran("tunai");
     }
     setSelectedKegiatan(kegiatanId);
     setDialogOpen(true);
