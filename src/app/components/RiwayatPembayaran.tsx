@@ -73,6 +73,8 @@ const metodeBadgeColor: Record<string, string> = {
   lainnya: "bg-slate-100 text-slate-600",
 };
 
+const metodeOptions = ["tunai", "transfer", "qris", "lainnya"] as const;
+
 /* ─── Paginator Component ─────────────────────────────────────── */
 function Paginator({
   page, total, count, pageSize, setPage
@@ -155,6 +157,7 @@ export default function RiwayatPembayaran() {
   const [selectedPembayaran,  setSelectedPembayaran]  = useState<Pembayaran | null>(null);
   const [editJumlah,          setEditJumlah]          = useState("");
   const [editTanggal,         setEditTanggal]         = useState("");
+  const [editMetode,          setEditMetode]          = useState("tunai");
   const [editKeterangan,      setEditKeterangan]      = useState("");
   const [isUpdating,          setIsUpdating]          = useState(false);
 
@@ -239,6 +242,7 @@ export default function RiwayatPembayaran() {
     setSelectedPembayaran(p);
     setEditJumlah(String(p.jumlah ?? ""));
     setEditTanggal(p.tanggal_pembayaran ? p.tanggal_pembayaran.split("T")[0] : "");
+    setEditMetode((p.metode_pembayaran || "tunai") as string);
     setEditKeterangan(p.bukti_pembayaran ?? "");
     setEditDialogOpen(true);
   };
@@ -253,6 +257,7 @@ export default function RiwayatPembayaran() {
       const { error } = await db.updatePembayaran(selectedPembayaran.id, {
         jumlah: jumlahNum,
         tanggal_pembayaran: new Date(editTanggal).toISOString(),
+        metode_pembayaran: editMetode,
         bukti_pembayaran: editKeterangan.trim(),
       });
       if (error) { toast.error(`❌ Gagal update: ${error.message}`); return; }
@@ -652,6 +657,20 @@ export default function RiwayatPembayaran() {
                 onChange={(e) => setEditJumlah(e.target.value)} required min="0"
                 className="rounded-xl border-slate-200"
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Metode Pembayaran</Label>
+              <select
+                value={editMetode}
+                onChange={(e) => setEditMetode(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {metodeOptions.map((metode) => (
+                  <option key={metode} value={metode}>
+                    {metodeLabel[metode]}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
