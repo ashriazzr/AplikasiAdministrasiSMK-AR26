@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { ScrollArea } from "./ui/scroll-area";
 import { Checkbox } from "./ui/checkbox";
-import { Plus, Edit, Trash2, Search, Users, BookOpen, AlertCircle, CreditCard, Gift, Award, ShieldCheck } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Users, BookOpen, AlertCircle, CreditCard, Gift, Award, ShieldCheck, Upload } from "lucide-react";
 import { db, type Siswa as SiswaType, type Kelas as KelasType, type KegiatanAdministrasi as KegiatanType, type BeasiswaAdministrasi as BeasiswaType } from "../../../utils/supabase/client";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 interface Siswa extends SiswaType {
   kelas?: {
@@ -45,6 +46,8 @@ export default function Rombel() {
   const [hasUserSelectedKelas, setHasUserSelectedKelas] = useState(false);
   const [beasiswaSearchSiswa, setBeasiswaSearchSiswa] = useState("");
   const [beasiswaSearchKegiatan, setBeasiswaSearchKegiatan] = useState("");
+  const [isImportingSiswa, setIsImportingSiswa] = useState(false);
+  const siswaImportRef = useRef<HTMLInputElement | null>(null);
 
   // Dialog states
   const [siswaDialogOpen, setSiswaDialogOpen] = useState(false);
@@ -158,6 +161,130 @@ export default function Rombel() {
     }
     toast.success("Data siswa dihapus");
     fetchData();
+  };
+
+  const normalizeImportKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const pickImportValue = (row: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+      const value = row[key];
+      if (value !== undefined && value !== null && String(value).trim() !== "") {
+        return String(value).trim();
+      }
+    }
+    return "";
+  };
+
+  const handleImportSiswaExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (kelasList.length === 0) {
+      toast.error("Data kelas belum tersedia. Tambahkan kelas terlebih dahulu.");
+      e.target.value = "";
+      return;
+    }
+
+    setIsImportingSiswa(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+      if (rows.length === 0) {
+        toast.error("File Excel kosong atau tidak memiliki data.");
+        return;
+      }
+
+      const kelasById = new Set(kelasList.map((kelas) => kelas.id));
+      const kelasByName = new Map(
+        kelasList.map((kelas) => {
+          const nama = `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""}`.trim().toLowerCase();
+          return [String(kelas.nama_kelas || nama).toLowerCase(), kelas.id] as const;
+        })
+      );
+
+      const generatedNisSet = new Set<string>();
+      const generateUniqueNis = () => {
+        let candidate = `IMP-${Date.now()}-${Math.floor(Math.random() * 9000) + 1000}`;
+        while (generatedNisSet.has(candidate)) {
+          candidate = `IMP-${Date.now()}-${Math.floor(Math.random() * 9000) + 1000}`;
+        }
+        generatedNisSet.add(candidate);
+        return candidate;
+      };
+
+      let successCount = 0;
+      const failures: string[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const normalizedRow: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(rows[i])) {
+          normalizedRow[normalizeImportKey(key)] = value;
+        }
+
+        const nama = pickImportValue(normalizedRow, ["nama", "namalengkap"]);
+        const kelasRaw = pickImportValue(normalizedRow, ["kelas", "kelasnama", "namakelas", "kelasid"]);
+        const jenisKelaminRaw = pickImportValue(normalizedRow, ["jeniskelamin", "gender", "jk"]);
+
+        let kelasId = "";
+        if (kelasRaw) {
+          if (kelasById.has(kelasRaw)) {
+            kelasId = kelasRaw;
+          } else {
+            kelasId = kelasByName.get(kelasRaw.toLowerCase()) || "";
+          }
+        }
+
+        const jenisKelamin = /^l(aki)?/i.test(jenisKelaminRaw)
+          ? "Laki-laki"
+          : /^p(erempuan)?/i.test(jenisKelaminRaw)
+            ? "Perempuan"
+            : "";
+
+        if (!nama || !kelasId || !jenisKelamin) {
+          failures.push(`Baris ${i + 2}: nama, kelas, dan jenis kelamin wajib diisi`);
+          continue;
+        }
+
+        const { error } = await db.createSiswa({
+          nama,
+          kelas_id: kelasId,
+          nis: pickImportValue(normalizedRow, ["nis"]) || generateUniqueNis(),
+          nisn: pickImportValue(normalizedRow, ["nisn"]),
+          jenis_kelamin: jenisKelamin,
+          tanggal_lahir: pickImportValue(normalizedRow, ["tanggallahir", "tglahir"]),
+          alamat: pickImportValue(normalizedRow, ["alamat"]),
+          asal_sekolah: pickImportValue(normalizedRow, ["asalsekolah", "asal"]),
+          rfid_card: pickImportValue(normalizedRow, ["rfid", "rfidcard", "uidrfid"]),
+        });
+
+        if (error) {
+          failures.push(`Baris ${i + 2}: ${error.message}`);
+          continue;
+        }
+
+        successCount++;
+      }
+
+      if (successCount > 0) {
+        toast.success(`Impor selesai. ${successCount} data siswa berhasil ditambahkan.`);
+        await fetchData();
+      }
+
+      if (failures.length > 0) {
+        toast.error(`Ada ${failures.length} data gagal diimpor.`);
+        console.error("Detail gagal impor siswa:", failures);
+      }
+    } catch (error) {
+      console.error("Error importing siswa excel:", error);
+      toast.error("Gagal membaca file Excel.");
+    } finally {
+      setIsImportingSiswa(false);
+      e.target.value = "";
+    }
   };
 
   const openSiswaForm = (siswa?: Siswa, kelasId?: string) => {
@@ -860,10 +987,7 @@ export default function Rombel() {
           <Card className="h-full flex flex-col shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between py-2.5 px-4">
               <CardTitle className="text-base">Program Beasiswa Administrasi</CardTitle>
-              <Button
-                onClick={() => openBeasiswaForm()}
-                className="h-8 bg-amber-600 hover:bg-amber-700"
-              >
+              <Button onClick={() => openBeasiswaForm()} className="h-8 bg-amber-600 hover:bg-amber-700">
                 <Gift className="w-4 h-4 mr-2" />
                 Tambah Program
               </Button>
@@ -993,13 +1117,31 @@ export default function Rombel() {
           <Card className="h-full flex flex-col shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between py-2.5 px-4">
               <CardTitle className="text-base">Manajemen Siswa</CardTitle>
-              <Button
-                onClick={() => openSiswaForm()}
-                className="h-8 bg-blue-600 hover:bg-blue-700"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Tambah Siswa
-              </Button>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={siswaImportRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={handleImportSiswaExcel}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => siswaImportRef.current?.click()}
+                  disabled={isImportingSiswa}
+                  className="h-8"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {isImportingSiswa ? "Mengimpor..." : "Impor Excel"}
+                </Button>
+                <Button
+                  onClick={() => openSiswaForm()}
+                  className="h-8 bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Tambah Siswa
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0 px-4 pb-3 pt-0">
               <ScrollArea className="h-full">

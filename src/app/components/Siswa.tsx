@@ -279,6 +279,16 @@ export default function Siswa() {
 
       let successCount = 0;
       const failures: string[] = [];
+      const generatedNisSet = new Set<string>();
+
+      const generateUniqueNis = () => {
+        let candidate = `IMP-${Date.now()}-${Math.floor(Math.random() * 9000) + 1000}`;
+        while (generatedNisSet.has(candidate)) {
+          candidate = `IMP-${Date.now()}-${Math.floor(Math.random() * 9000) + 1000}`;
+        }
+        generatedNisSet.add(candidate);
+        return candidate;
+      };
 
       for (let i = 0; i < rawRows.length; i++) {
         const normalizedRow: Record<string, unknown> = {};
@@ -287,7 +297,7 @@ export default function Siswa() {
         }
 
         const nama = pickValue(normalizedRow, ["nama", "namalengkap"]);
-        const nis = pickValue(normalizedRow, ["nis"]);
+        const nis = pickValue(normalizedRow, ["nis"]) || generateUniqueNis();
         const nisn = pickValue(normalizedRow, ["nisn"]);
         const jenisKelaminRaw = pickValue(normalizedRow, ["jeniskelamin", "gender"]);
         const tanggalLahir = toDateYmd(normalizedRow["tanggallahir"] ?? normalizedRow["tglahir"]);
@@ -311,8 +321,8 @@ export default function Siswa() {
             ? "Perempuan"
             : "";
 
-        if (!nama || !nis || !nisn || !kelasId || !jenisKelamin || !tanggalLahir || !alamat || !asalSekolah) {
-          failures.push(`Baris ${i + 2}: data wajib tidak lengkap`);
+        if (!nama || !kelasId || !jenisKelamin) {
+          failures.push(`Baris ${i + 2}: nama, kelas, dan jenis kelamin wajib diisi`);
           continue;
         }
 
@@ -353,6 +363,8 @@ export default function Siswa() {
       e.target.value = "";
     }
   };
+
+    toast.info("Format impor: wajib Nama, Kelas, dan Jenis Kelamin. Kolom lain opsional.");
 
   const filteredSiswa = siswaList.filter((siswa) => {
     const matchSearch = 
@@ -404,6 +416,9 @@ export default function Siswa() {
                     <Upload className="w-4 h-4 mr-2" />
                     {isImporting ? "Mengimpor..." : "Impor Excel"}
                   </Button>
+                  <span className="text-xs text-gray-500 hidden md:inline">
+                    Wajib: nama, kelas, jenis kelamin
+                  </span>
 
                   <Dialog open={dialogOpen} onOpenChange={(open) => {
                     setDialogOpen(open);
