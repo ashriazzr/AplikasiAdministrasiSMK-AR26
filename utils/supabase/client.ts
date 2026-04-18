@@ -153,7 +153,7 @@ const syncTagihanForSiswaKelas = async (siswaId: string, kelasId?: string | null
 };
 
 export interface Kelas { id: string; nama_kelas?: string; wali_kelas: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
-export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; created_at: string; updated_at: string; }
+export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; status_siswa?: "aktif" | "pindahan" | "keluar"; created_at: string; updated_at: string; }
 export interface Administrasi { id: string; user_id?: string; nama: string; email: string; jabatan: string; telepon: string; tanggal_bergabung: string; created_at: string; updated_at: string; }
 export interface Tagihan { id: string; siswa_id: string; kegiatan_id: string; jumlah: number; status: "pending" | "paid" | "overdue"; tanggal_jatuh_tempo: string; created_at: string; updated_at: string; }
 export interface Pembayaran { id: string; tagihan_id: string; siswa_id: string; jumlah: number; metode_pembayaran: string; tanggal_pembayaran: string; bukti_pembayaran: string; dicatat_oleh?: string; cetak_struk?: boolean; nomor_struk?: string; created_at: string; updated_at: string; }
@@ -231,10 +231,18 @@ export const db = {
   async createSiswa(siswa: Omit<Siswa, "id" | "created_at" | "updated_at">) {
     const payload = {
       ...siswa,
+      status_siswa: siswa.status_siswa || "aktif",
       tanggal_lahir: siswa.tanggal_lahir ? siswa.tanggal_lahir : null,
       rfid_card: siswa.rfid_card ? siswa.rfid_card : null,
     };
-    const result = await supabase.from("siswa").insert([payload]).select().single();
+    let result = await supabase.from("siswa").insert([payload]).select().single();
+    if (result.error && isMissingColumnsInSchemaCache(result.error, ["status_siswa"])) {
+      const fallbackPayload = {
+        ...payload,
+        status_siswa: undefined,
+      };
+      result = await supabase.from("siswa").insert([fallbackPayload]).select().single();
+    }
     if (result.data?.id) {
       await syncTagihanForSiswaKelas(result.data.id, result.data.kelas_id ?? payload.kelas_id);
     }
@@ -243,6 +251,7 @@ export const db = {
   async updateSiswa(id: string, siswa: Partial<Siswa>) {
     const payload = {
       ...siswa,
+      ...(siswa.status_siswa !== undefined ? { status_siswa: siswa.status_siswa || "aktif" } : {}),
       ...(siswa.tanggal_lahir !== undefined
         ? { tanggal_lahir: siswa.tanggal_lahir ? siswa.tanggal_lahir : null }
         : {}),
@@ -250,7 +259,11 @@ export const db = {
         ? { rfid_card: siswa.rfid_card ? siswa.rfid_card : null }
         : {}),
     };
-    const result = await supabase.from("siswa").update(payload).eq("id", id).select().single();
+    let result = await supabase.from("siswa").update(payload).eq("id", id).select().single();
+    if (result.error && isMissingColumnsInSchemaCache(result.error, ["status_siswa"])) {
+      const { status_siswa, ...fallbackPayload } = payload as typeof payload & { status_siswa?: unknown };
+      result = await supabase.from("siswa").update(fallbackPayload).eq("id", id).select().single();
+    }
     const kelasId = (result.data as { kelas_id?: string } | null)?.kelas_id ?? payload.kelas_id ?? null;
     if (result.data?.id) {
       await syncTagihanForSiswaKelas(result.data.id, kelasId);
@@ -275,9 +288,9 @@ export const db = {
   async markTagihanAsPaid(tagihanIds: string[]) { const { error } = await supabase.from("tagihan").update({ status: "paid", updated_at: new Date().toISOString() }).in("id", tagihanIds); return { error }; },
 
   async getPembayaran() {
-    const { data, error } = await supabase.from("pembayaran").select("*, siswa:siswa_id (id, nama, nis, kelas_id), tagihan:tagihan_id (id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal))").order("tanggal_pembayaran", { ascending: false });
+    const { data, error } = await supabase.from("pembayaran").select("*, siswa:siswa_id (id, nama, nis, kelas_id, status_siswa), tagihan:tagihan_id (id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal))").order("tanggal_pembayaran", { ascending: false });
     if (error) return { data: null, error };
-    const transformed = (data || []).map((p: any) => ({ ...p, jumlah_bayar: p.jumlah, tanggal_bayar: p.tanggal_pembayaran, keterangan: p.bukti_pembayaran ?? "", siswa_nama: p.siswa?.nama ?? "-", siswa_nis: p.siswa?.nis ?? "-", kelas_id: p.siswa?.kelas_id ?? null, kegiatan_id: p.tagihan?.kegiatan_id ?? null, nama_kegiatan: p.tagihan?.kegiatan?.nama_kegiatan ?? "Pembayaran", kegiatan: p.tagihan?.kegiatan ?? null }));
+    const transformed = (data || []).map((p: any) => ({ ...p, jumlah_bayar: p.jumlah, tanggal_bayar: p.tanggal_pembayaran, keterangan: p.bukti_pembayaran ?? "", siswa_nama: p.siswa?.nama ?? "-", siswa_nis: p.siswa?.nis ?? "-", siswa_status: p.siswa?.status_siswa ?? "aktif", kelas_id: p.siswa?.kelas_id ?? null, kegiatan_id: p.tagihan?.kegiatan_id ?? null, nama_kegiatan: p.tagihan?.kegiatan?.nama_kegiatan ?? "Pembayaran", kegiatan: p.tagihan?.kegiatan ?? null }));
     return { data: transformed, error };
   },
   async getPembayaranWithDetails() { const { data, error } = await supabase.from("pembayaran").select("*, siswa:siswa_id (id, nama, nis, kelas_id, kelas:kelas_id (id, nama_kelas)), tagihan:tagihan_id (id, jumlah, status, tanggal_jatuh_tempo, kegiatan_id)").order("tanggal_pembayaran", { ascending: false }); return { data: data as PembayaranWithDetails[] | null, error }; },

@@ -24,6 +24,7 @@ export default function Siswa() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSiswa, setEditingSiswa] = useState<Siswa | null>(null);
   const [selectedKelasFilter, setSelectedKelasFilter] = useState<string>("all");
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>("all");
   const [rfidEditDialogOpen, setRfidEditDialogOpen] = useState(false);
   const [editingRFIDSiswa, setEditingRFIDSiswa] = useState<Siswa | null>(null);
   const [newRFIDValue, setNewRFIDValue] = useState("");
@@ -35,6 +36,7 @@ export default function Siswa() {
     kelas_id: "",
     nis: "",
     nisn: "",
+    status_siswa: "aktif" as "aktif" | "pindahan" | "keluar",
     jenis_kelamin: "",
     tanggal_lahir: "",
     alamat: "",
@@ -78,6 +80,11 @@ export default function Siswa() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (formData.status_siswa === "pindahan" && !formData.asal_sekolah.trim()) {
+      toast.error("Siswa pindahan wajib isi nama SMP asal");
+      return;
+    }
     
     try {
       if (editingSiswa) {
@@ -130,6 +137,7 @@ export default function Siswa() {
       kelas_id: siswa.kelas_id,
       nis: siswa.nis,
       nisn: siswa.nisn,
+      status_siswa: (siswa.status_siswa || "aktif") as "aktif" | "pindahan" | "keluar",
       jenis_kelamin: siswa.jenis_kelamin,
       tanggal_lahir: siswa.tanggal_lahir,
       alamat: siswa.alamat,
@@ -146,6 +154,7 @@ export default function Siswa() {
       kelas_id: "",
       nis: "",
       nisn: "",
+      status_siswa: "aktif",
       jenis_kelamin: "",
       tanggal_lahir: "",
       alamat: "",
@@ -303,6 +312,7 @@ export default function Siswa() {
         const tanggalLahir = toDateYmd(normalizedRow["tanggallahir"] ?? normalizedRow["tglahir"]);
         const alamat = pickValue(normalizedRow, ["alamat"]);
         const asalSekolah = pickValue(normalizedRow, ["asalsekolah", "asalsekolahasal"]);
+        const statusSiswaRaw = pickValue(normalizedRow, ["statussiswa", "status"]);
         const rfidCard = pickValue(normalizedRow, ["rfid", "rfidcard", "uidrfid"]);
 
         const kelasIdInput = pickValue(normalizedRow, ["kelasid"]);
@@ -321,8 +331,19 @@ export default function Siswa() {
             ? "Perempuan"
             : "";
 
+        const statusSiswa: "aktif" | "pindahan" | "keluar" = /^pin/i.test(statusSiswaRaw)
+          ? "pindahan"
+          : /^kel/i.test(statusSiswaRaw)
+            ? "keluar"
+            : "aktif";
+
         if (!nama || !kelasId || !jenisKelamin) {
           failures.push(`Baris ${i + 2}: nama, kelas, dan jenis kelamin wajib diisi`);
+          continue;
+        }
+
+        if (statusSiswa === "pindahan" && !asalSekolah) {
+          failures.push(`Baris ${i + 2}: siswa pindahan wajib isi asal sekolah (SMP)`);
           continue;
         }
 
@@ -331,6 +352,7 @@ export default function Siswa() {
           kelas_id: kelasId,
           nis,
           nisn,
+          status_siswa: statusSiswa,
           jenis_kelamin: jenisKelamin,
           tanggal_lahir: tanggalLahir,
           alamat,
@@ -372,8 +394,10 @@ export default function Siswa() {
       siswa.nis.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchKelas = selectedKelasFilter === "all" || siswa.kelas_id === selectedKelasFilter;
+    const statusSiswa = (siswa.status_siswa || "aktif").toLowerCase();
+    const matchStatus = selectedStatusFilter === "all" || statusSiswa === selectedStatusFilter;
     
-    return matchSearch && matchKelas;
+    return matchSearch && matchKelas && matchStatus;
   });
 
   const groupedSiswa: Record<string, Siswa[]> = {};
@@ -504,6 +528,29 @@ export default function Siswa() {
                           </Select>
                         </div>
                         <div className="space-y-2">
+                          <Label htmlFor="status_siswa">Status Siswa</Label>
+                          <Select
+                            value={formData.status_siswa}
+                            onValueChange={(value: "aktif" | "pindahan" | "keluar") => {
+                              setFormData({
+                                ...formData,
+                                status_siswa: value,
+                                asal_sekolah: value === "pindahan" ? formData.asal_sekolah : "",
+                              });
+                            }}
+                            required
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Pilih Status Siswa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="aktif">Aktif</SelectItem>
+                              <SelectItem value="pindahan">Pindahan</SelectItem>
+                              <SelectItem value="keluar">Keluar</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
                           <Label htmlFor="tanggal_lahir">Tanggal Lahir</Label>
                           <Input
                             id="tanggal_lahir"
@@ -523,12 +570,15 @@ export default function Siswa() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="asal_sekolah">Asal Sekolah</Label>
+                          <Label htmlFor="asal_sekolah">
+                            {formData.status_siswa === "pindahan" ? "Nama SMP Asal" : "Asal Sekolah"}
+                          </Label>
                           <Input
                             id="asal_sekolah"
+                            placeholder={formData.status_siswa === "pindahan" ? "Wajib diisi untuk siswa pindahan" : "Opsional"}
                             value={formData.asal_sekolah}
                             onChange={(e) => setFormData({ ...formData, asal_sekolah: e.target.value })}
-                            required
+                            required={formData.status_siswa === "pindahan"}
                           />
                         </div>
                         <div className="space-y-2 md:col-span-2">
@@ -576,6 +626,17 @@ export default function Siswa() {
                     ))}
                   </SelectContent>
                 </Select>
+                <Select value={selectedStatusFilter} onValueChange={setSelectedStatusFilter}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Status</SelectItem>
+                    <SelectItem value="aktif">Aktif</SelectItem>
+                    <SelectItem value="pindahan">Pindahan</SelectItem>
+                    <SelectItem value="keluar">Keluar</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {loading ? (
@@ -593,6 +654,7 @@ export default function Siswa() {
                         <th className="text-left p-3 font-medium text-gray-700">NISN</th>
                         <th className="text-left p-3 font-medium text-gray-700">Nama</th>
                         <th className="text-left p-3 font-medium text-gray-700">Kelas</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Status</th>
                         <th className="text-left p-3 font-medium text-gray-700">Asal Sekolah</th>
                         <th className="text-left p-3 font-medium text-gray-700">Jenis Kelamin</th>
                         <th className="text-right p-3 font-medium text-gray-700">Aksi</th>
@@ -603,9 +665,16 @@ export default function Siswa() {
                         <tr key={siswa.id} className="border-b hover:bg-gray-50">
                           <td className="p-3">{siswa.nis}</td>
                           <td className="p-3">{siswa.nisn}</td>
-                          <td className="p-3 font-medium">{siswa.nama}</td>
+                          <td className={`p-3 font-medium ${siswa.status_siswa === "pindahan" ? "text-red-600" : ""}`}>{siswa.nama}</td>
                           <td className="p-3">
                             <Badge variant="outline">{getKelasName(siswa.kelas_id)}</Badge>
+                          </td>
+                          <td className="p-3">
+                            <Badge
+                              variant={siswa.status_siswa === "keluar" ? "destructive" : siswa.status_siswa === "pindahan" ? "secondary" : "default"}
+                            >
+                              {siswa.status_siswa || "aktif"}
+                            </Badge>
                           </td>
                           <td className="p-3">{siswa.asal_sekolah}</td>
                           <td className="p-3">{siswa.jenis_kelamin}</td>
@@ -691,7 +760,7 @@ export default function Siswa() {
                           >
                             <div className="flex justify-between items-start mb-2">
                               <div>
-                                <h3 className="font-medium text-gray-800">{siswa.nama}</h3>
+                                <h3 className={`font-medium ${siswa.status_siswa === "pindahan" ? "text-red-600" : "text-gray-800"}`}>{siswa.nama}</h3>
                                 <p className="text-sm text-gray-500">NIS: {siswa.nis}</p>
                               </div>
                               <Badge variant={siswa.jenis_kelamin === "Laki-laki" ? "default" : "secondary"}>
@@ -700,6 +769,7 @@ export default function Siswa() {
                             </div>
                             <div className="text-sm text-gray-600 space-y-1">
                               <p>🎂 {new Date(siswa.tanggal_lahir).toLocaleDateString('id-ID')}</p>
+                              <p>📌 Status: {(siswa.status_siswa || "aktif").toUpperCase()}</p>
                               <p className="truncate">📍 {siswa.alamat}</p>
                             </div>
                             <div className="flex gap-2 mt-3">

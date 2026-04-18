@@ -25,6 +25,7 @@ interface Siswa {
   nama: string;
   nis: string;
   kelas_id: string | null;
+  status_siswa?: "aktif" | "pindahan" | "keluar";
 }
 
 export default function Kelas() {
@@ -297,7 +298,7 @@ export default function Kelas() {
                                 />
                                 <label
                                   htmlFor={`siswa_${siswa.id}`}
-                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                  className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer ${siswa.status_siswa === "pindahan" ? "text-red-600" : ""}`}
                                 >
                                   {siswa.nama} ({siswa.nis})
                                 </label>

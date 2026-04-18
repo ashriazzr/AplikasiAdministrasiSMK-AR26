@@ -24,6 +24,7 @@ interface Pembayaran {
   metode_pembayaran?: string;
   siswa_nama?: string;
   siswa_nis?: string;
+  siswa_status?: "aktif" | "pindahan" | "keluar";
   kelas_id?: string;
   nama_kegiatan?: string;
   created_at: string;
@@ -35,6 +36,7 @@ interface RiwayatRow {
   id: string;
   tanggal: string;
   nama_siswa: string;
+  status_siswa?: "aktif" | "pindahan" | "keluar";
   nis: string;
   kelas: string;
   nama_kegiatan: string;
@@ -218,6 +220,7 @@ export default function RiwayatPembayaran() {
         id: p.id,
         tanggal: p.tanggal_pembayaran,
         nama_siswa: p.siswa_nama || "-",
+        status_siswa: p.siswa_status || "aktif",
         nis: p.siswa_nis || "-",
         kelas: kelasData?.nama_kelas || "-",
         nama_kegiatan: p.nama_kegiatan || "Pembayaran",
@@ -527,7 +530,7 @@ export default function RiwayatPembayaran() {
                         <td className="px-4 py-3 text-slate-600 whitespace-nowrap text-xs">{formatDate(r.tanggal)}</td>
                         <td className="px-4 py-3 text-slate-500 font-mono text-xs">{r.nis}</td>
                         <td className="px-4 py-3">
-                          <span className="font-semibold text-slate-800">{r.nama_siswa}</span>
+                          <span className={`font-semibold ${r.status_siswa === "pindahan" ? "text-red-600" : "text-slate-800"}`}>{r.nama_siswa}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium whitespace-nowrap">

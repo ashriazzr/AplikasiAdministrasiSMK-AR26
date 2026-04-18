@@ -15,13 +15,14 @@ import { toast } from "sonner";
 
 /* ─── Types ────────────────────────────────────────────────── */
 interface Kelas       { id: string; nama_kelas: string }
-interface Siswa       { id: string; nama: string; nis: string; kelas_id: string }
+interface Siswa       { id: string; nama: string; nis: string; kelas_id: string; status_siswa?: "aktif" | "pindahan" | "keluar" }
 interface Tagihan     { id: string; kegiatan_id: string; nama_kegiatan: string; nominal: number; batas_pembayaran: string; total_dibayar: number; sisa_bayar: number; status: string }
 interface Pembayaran  { id: string; tagihan_id: string; kegiatan_id: string; siswa_id: string; jumlah: number; tanggal_pembayaran: string; bukti_pembayaran?: string; metode_pembayaran?: string; dicatat_oleh?: string; siswa?: { id: string; nama: string; nis: string; kelas_id: string }; kegiatan?: { id: string; nama_kegiatan: string; nominal: number } }
 interface SiswaTagihanSummary {
   siswa_id: string;
   nama: string;
   nis: string;
+  status_siswa?: "aktif" | "pindahan" | "keluar";
   jumlah_tagihan: number;
   jumlah_lunas: number;
   total_tagihan: number;
@@ -177,6 +178,7 @@ export default function Tagihan() {
             siswa_id: siswa.id,
             nama: siswa.nama,
             nis: siswa.nis,
+            status_siswa: siswa.status_siswa || "aktif",
             jumlah_tagihan: tagihanSiswa.length,
             jumlah_lunas: tagihanSiswa.filter((t) => Number(t.sisa_bayar || 0) === 0).length,
             total_tagihan: tagihanSiswa.reduce((sum, t) => sum + Number(t.nominal || 0), 0),
@@ -365,7 +367,7 @@ export default function Tagihan() {
             <div className="mt-3 p-3 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs text-blue-600">Siswa dipilih</p>
-                <p className="text-sm font-semibold text-slate-800">{selectedSiswaData?.nama} ({selectedSiswaData?.nis})</p>
+                <p className={`text-sm font-semibold ${selectedSiswaData?.status_siswa === "pindahan" ? "text-red-600" : "text-slate-800"}`}>{selectedSiswaData?.nama} ({selectedSiswaData?.nis})</p>
               </div>
               <Button
                 type="button"
@@ -420,7 +422,7 @@ export default function Tagihan() {
                               onClick={() => setSelectedSiswa(row.siswa_id)}
                               className="text-left"
                             >
-                              <p className="font-semibold text-blue-700 hover:text-blue-800 underline underline-offset-2">{row.nama}</p>
+                              <p className={`font-semibold hover:text-blue-800 underline underline-offset-2 ${row.status_siswa === "pindahan" ? "text-red-600" : "text-blue-700"}`}>{row.nama}</p>
                               <p className="text-xs text-slate-400">{row.nis}</p>
                             </button>
                           </td>
@@ -476,7 +478,7 @@ export default function Tagihan() {
                   {selectedSiswaData?.nama.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="text-white font-semibold text-sm">{selectedSiswaData?.nama}</p>
+                  <p className={`font-semibold text-sm ${selectedSiswaData?.status_siswa === "pindahan" ? "text-red-300" : "text-white"}`}>{selectedSiswaData?.nama}</p>
                   <p className="text-slate-400 text-xs">{selectedSiswaData?.nis}</p>
                 </div>
               </div>
@@ -704,7 +706,7 @@ export default function Tagihan() {
               {editingPembayaran ? "Edit Pembayaran" : "Input Pembayaran Baru"}
             </DialogTitle>
             {selectedSiswaData && (
-              <DialogDescription className="text-sm text-blue-600 font-semibold flex items-center gap-1.5 mt-1">
+              <DialogDescription className={`text-sm font-semibold flex items-center gap-1.5 mt-1 ${selectedSiswaData.status_siswa === "pindahan" ? "text-red-600" : "text-blue-600"}`}>
                 <User className="w-4 h-4" /> {selectedSiswaData.nama}
               </DialogDescription>
             )}

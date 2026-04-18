@@ -851,7 +851,7 @@ export default function Rombel() {
                                       <td className="py-2 px-3">{i + 1}</td>
                                       <td className="py-2 px-3 font-medium">
                                         <div className="flex items-center gap-2">
-                                          <span>{siswa.nama}</span>
+                                          <span className={siswa.status_siswa === "pindahan" ? "text-red-600" : ""}>{siswa.nama}</span>
                                           {getBeasiswaForSiswa(siswa.id).length > 0 && (
                                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                                               Beasiswa
@@ -1080,7 +1080,7 @@ export default function Rombel() {
                             <div className="flex flex-wrap gap-1.5">
                               {(beasiswa.siswa_list || []).slice(0, 4).map((siswa) => (
                                 <span key={siswa.id} className="text-[11px] px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                                  {siswa.nama}
+                                  <span className={siswa.status_siswa === "pindahan" ? "text-red-600" : ""}>{siswa.nama}</span>
                                 </span>
                               ))}
                               {(beasiswa.siswa_list || []).length === 0 && (
@@ -1192,7 +1192,7 @@ export default function Rombel() {
                             <td className="py-2 px-3">{i + 1}</td>
                             <td className="py-2 px-3 font-semibold">
                               <div className="flex items-center gap-2">
-                                <span>{siswa.nama}</span>
+                                <span className={siswa.status_siswa === "pindahan" ? "text-red-600" : ""}>{siswa.nama}</span>
                                 {getBeasiswaForSiswa(siswa.id).length > 0 && (
                                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
                                     Beasiswa
@@ -1677,7 +1677,7 @@ export default function Rombel() {
                                 }
                               />
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-medium truncate">{siswa.nama}</p>
+                                <p className={`text-sm font-medium truncate ${siswa.status_siswa === "pindahan" ? "text-red-600" : ""}`}>{siswa.nama}</p>
                                 <p className="text-xs text-gray-500">NIS {siswa.nis} {siswa.kelas?.nama_kelas ? `• ${siswa.kelas.nama_kelas}` : ""}</p>
                                 {assigned.length > 0 && (
                                   <p className="text-[11px] text-amber-600 mt-1">Sudah punya {assigned.length} program aktif</p>
