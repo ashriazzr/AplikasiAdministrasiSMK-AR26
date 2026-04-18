@@ -281,63 +281,96 @@ export default function KegiatanAdministrasi() {
 
       {/* ── Form Dialog ─────────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={open => { if (!submitting) setFormOpen(open); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[92vh] overflow-hidden p-0">
           <DialogHeader>
-            <DialogTitle>{editingKeg ? "Edit Kegiatan" : "Tambah Kegiatan Baru"}</DialogTitle>
-            <DialogDescription>Tagihan akan digenerate otomatis untuk semua siswa di kelas yang dipilih.</DialogDescription>
+            <DialogTitle className="px-6 pt-6">{editingKeg ? "Edit Kegiatan" : "Tambah Kegiatan Baru"}</DialogTitle>
+            <DialogDescription className="px-6">
+              Tagihan akan digenerate otomatis untuk semua siswa di kelas yang dipilih.
+            </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-            <div>
-              <Label>Nama Kegiatan</Label>
-              <Input value={form.nama_kegiatan} onChange={e => setForm(p => ({ ...p, nama_kegiatan: e.target.value }))}
-                placeholder="Contoh: SPP Januari, Uang Seragam..." disabled={submitting} required/>
-            </div>
-            <div>
-              <Label>Nominal (Rp)</Label>
-              <Input type="number" min="0" value={form.nominal} onChange={e => setForm(p => ({ ...p, nominal: e.target.value }))}
-                placeholder="500000" disabled={submitting} required/>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Tanggal Mulai</Label>
-                <Input type="date" value={form.tanggal_mulai} onChange={e => setForm(p => ({ ...p, tanggal_mulai: e.target.value }))}
-                  disabled={submitting} required/>
-              </div>
-              <div>
-                <Label>Tanggal Selesai <span className="text-gray-400 font-normal text-xs">(opsional)</span></Label>
-                <Input type="date" value={form.tanggal_selesai} onChange={e => setForm(p => ({ ...p, tanggal_selesai: e.target.value }))}
-                  disabled={submitting}/>
-              </div>
-            </div>
-            <div>
-              <Label className="mb-2 block">Kelas yang Wajib Membayar</Label>
-              {kelas.length > 0 ? (
-                <>
-                  <ScrollArea className="border rounded-lg p-3 h-44">
-                    <div className="space-y-1 pr-2">
-                      {kelas.map(k => (
-                        <label key={k.id} className="flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-50">
-                          <Checkbox checked={form.kelas_ids.includes(k.id)} disabled={submitting}
-                            onCheckedChange={v => setForm(p => ({
-                              ...p, kelas_ids: v ? [...p.kelas_ids, k.id] : p.kelas_ids.filter(id => id !== k.id),
-                            }))}/>
-                          <span className="text-sm">{k.nama_kelas} <span className="text-gray-400">({k.tingkat})</span></span>
-                        </label>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                  <p className="text-xs text-gray-500 mt-1.5">
-                    {form.kelas_ids.length > 0 ? `✓ ${form.kelas_ids.length} kelas dipilih` : "Pilih minimal 1 kelas"}
-                  </p>
-                </>
-              ) : (
-                <div className="border rounded-lg p-6 text-center bg-gray-50 text-sm text-gray-500">
-                  Belum ada kelas — tambahkan di menu Kelas terlebih dahulu
+          <form onSubmit={handleSubmit} className="flex max-h-[92vh] flex-col min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Nama Kegiatan</Label>
+                  <Input
+                    value={form.nama_kegiatan}
+                    onChange={e => setForm(p => ({ ...p, nama_kegiatan: e.target.value }))}
+                    placeholder="Contoh: SPP Januari, Uang Seragam..."
+                    disabled={submitting}
+                    required
+                  />
                 </div>
-              )}
+                <div className="space-y-2">
+                  <Label>Nominal (Rp)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.nominal}
+                    onChange={e => setForm(p => ({ ...p, nominal: e.target.value }))}
+                    placeholder="500000"
+                    disabled={submitting}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tanggal Mulai</Label>
+                  <Input
+                    type="date"
+                    value={form.tanggal_mulai}
+                    onChange={e => setForm(p => ({ ...p, tanggal_mulai: e.target.value }))}
+                    disabled={submitting}
+                    required
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Tanggal Selesai <span className="text-gray-400 font-normal text-xs">(opsional)</span></Label>
+                  <Input
+                    type="date"
+                    value={form.tanggal_selesai}
+                    onChange={e => setForm(p => ({ ...p, tanggal_selesai: e.target.value }))}
+                    disabled={submitting}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Kelas yang Wajib Membayar</Label>
+                {kelas.length > 0 ? (
+                  <>
+                    <div className="border rounded-lg p-3 h-48 overflow-y-auto">
+                      <div className="space-y-1 pr-2">
+                        {kelas.map(k => (
+                          <label key={k.id} className="flex items-center gap-3 p-2 rounded cursor-pointer hover:bg-gray-50">
+                            <Checkbox
+                              checked={form.kelas_ids.includes(k.id)}
+                              disabled={submitting}
+                              onCheckedChange={v => setForm(p => ({
+                                ...p,
+                                kelas_ids: v ? [...p.kelas_ids, k.id] : p.kelas_ids.filter(id => id !== k.id),
+                              }))}
+                            />
+                            <span className="text-sm">{k.nama_kelas}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      {form.kelas_ids.length > 0 ? `✓ ${form.kelas_ids.length} kelas dipilih` : "Pilih minimal 1 kelas"}
+                    </p>
+                  </>
+                ) : (
+                  <div className="border rounded-lg p-6 text-center bg-gray-50 text-sm text-gray-500">
+                    Belum ada kelas — tambahkan di menu Kelas terlebih dahulu
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setFormOpen(false)} disabled={submitting} className="flex-1">Batal</Button>
+
+            <div className="px-6 py-4 border-t bg-white mt-auto flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setFormOpen(false)} disabled={submitting} className="flex-1">
+                Batal
+              </Button>
               <Button type="submit" disabled={submitting} className="flex-1">
                 {submitting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/>Menyimpan...</> : editingKeg ? "Update" : "Simpan"}
               </Button>
