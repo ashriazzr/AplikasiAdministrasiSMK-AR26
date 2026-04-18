@@ -15,13 +15,13 @@ export function StudentName({
   className,
   transferClassName,
 }: StudentNameProps) {
-  const isTransfer = status === "pindahan";
+  const isHighlighted = status === "pindahan" || status === "keluar";
 
   return (
     <span
       className={cn(
         className,
-        isTransfer ? transferClassName || "text-red-600" : ""
+        isHighlighted ? transferClassName || "text-red-600" : ""
       )}
     >
       {name || "-"}
