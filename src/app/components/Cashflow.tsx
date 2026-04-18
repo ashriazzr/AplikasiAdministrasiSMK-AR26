@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import {
   TrendingUp, TrendingDown, Plus, Trash2, Edit2,
-  Download, Settings, DollarSign, RefreshCw,
+  Download, Settings, DollarSign, RefreshCw, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { db } from "../../../utils/supabase/client";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ interface ActivitySummary { totalPemasukan: number; totalPengeluaran: number; sa
 const rp = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 const fmtDate = (s: string) => { if (!s) return "-"; const d = new Date(s); return isNaN(d.getTime()) ? s : d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }); };
 const COLOR_PRESETS = ["#10b981","#06b6d4","#ef4444","#f97316","#8b5cf6","#eab308","#6366f1","#14b8a6","#64748b","#ec4899"];
+const MANUAL_TX_PAGE_SIZE = 20;
 
 export default function Cashflow() {
   const [searchParams] = useSearchParams();
@@ -36,6 +37,7 @@ export default function Cashflow() {
   const [txOpen, setTxOpen]         = useState(false);
   const [catOpen, setCatOpen]       = useState(false);
   const [detailKegId, setDetailKegId] = useState<string>("");
+  const [manualTxPage, setManualTxPage] = useState(1);
   const [editingTx, setEditingTx]   = useState<Pengeluaran | null>(null);
   const [editingCat, setEditingCat] = useState<Kategori | null>(null);
   const [selKegId, setSelKegId]     = useState<string>("");
@@ -58,6 +60,10 @@ export default function Cashflow() {
       setDetailKegId(target.id);
     }
   }, [loading, kegiatan, kegiatanIdParam, detailKegId]);
+
+  useEffect(() => {
+    setManualTxPage(1);
+  }, [detailKegId]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -175,6 +181,17 @@ export default function Cashflow() {
 
   const detailKg = kegiatan.find(k => k.id === detailKegId);
   const detailSumm = summaries[detailKegId];
+  const sortedManualTransactions = (detailSumm?.pengeluaranList ?? [])
+    .slice()
+    .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+  const manualTxTotalPages = Math.max(1, Math.ceil(sortedManualTransactions.length / MANUAL_TX_PAGE_SIZE));
+  const currentManualTxPage = Math.min(manualTxPage, manualTxTotalPages);
+  const paginatedManualTransactions = sortedManualTransactions.slice(
+    (currentManualTxPage - 1) * MANUAL_TX_PAGE_SIZE,
+    currentManualTxPage * MANUAL_TX_PAGE_SIZE,
+  );
+  const manualTxStart = sortedManualTransactions.length === 0 ? 0 : (currentManualTxPage - 1) * MANUAL_TX_PAGE_SIZE + 1;
+  const manualTxEnd = Math.min(currentManualTxPage * MANUAL_TX_PAGE_SIZE, sortedManualTransactions.length);
 
   return (
     <LayoutWrapper title="Cashflow" subtitle="Detail pemasukan dan pengeluaran kegiatan">
@@ -267,10 +284,7 @@ export default function Cashflow() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {detailSumm.pengeluaranList
-                          .slice()
-                          .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime())
-                          .map((tx) => {
+                        {paginatedManualTransactions.map((tx) => {
                             const cat = categories.find((c) => c.id === tx.kategori);
                             const isIncome = tx.keterangan === "income";
                             return (
@@ -306,6 +320,36 @@ export default function Cashflow() {
                       </tbody>
                     </table>
                   </div>
+                  {manualTxTotalPages > 1 && (
+                    <div className="flex items-center justify-between border-t bg-gray-50 px-4 py-2 text-xs text-gray-500">
+                      <span>
+                        Menampilkan {manualTxStart}-{manualTxEnd} dari {sortedManualTransactions.length} transaksi
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => setManualTxPage((p) => Math.max(1, p - 1))}
+                          disabled={currentManualTxPage === 1}
+                        >
+                          <ChevronLeft size={14} />
+                        </Button>
+                        <span className="min-w-[88px] text-center text-xs text-gray-600">
+                          Hal {currentManualTxPage} / {manualTxTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => setManualTxPage((p) => Math.min(manualTxTotalPages, p + 1))}
+                          disabled={currentManualTxPage === manualTxTotalPages}
+                        >
+                          <ChevronRight size={14} />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </section>
