@@ -20,7 +20,7 @@ interface Kegiatan {
   tanggal_mulai: string; tanggal_selesai?: string;
   kelas_ids?: string[]; kelas_list?: Kelas[]; status?: string;
 }
-interface Kelas { id: string; nama_kelas: string; tingkat: string; }
+interface Kelas { id: string; nama_kelas: string; tingkat?: string; }
 interface SiswaTagihan {
   tagihan_id: string; siswa_id: string; nama: string; nis: string;
   kelas_nama: string; nominal: number; terbayar: number; sisa: number;
@@ -67,6 +67,7 @@ export default function KegiatanAdministrasi() {
   const [detail, setDetail]               = useState<DetailData | null>(null);
   const [editingKeg, setEditingKeg]       = useState<Kegiatan | null>(null);
   const [searchDetail, setSearchDetail]   = useState("");
+  const [kelasFilter, setKelasFilter]     = useState("all");
   const [sortCol, setSortCol]             = useState<"nama" | "sisa" | "status">("status");
   const [sortAsc, setSortAsc]             = useState(false);
   const [paymentFilter, setPaymentFilter] = useState<"all" | "paid" | "pending" | "overdue" | "unpaid">("all");
@@ -105,8 +106,15 @@ export default function KegiatanAdministrasi() {
     if (form.kelas_ids.length === 0) { toast.error("Pilih minimal 1 kelas!"); return; }
     if (submitting) return;
     setSubmitting(true);
-    const payload = { nama_kegiatan: form.nama_kegiatan, nominal: parseFloat(form.nominal),
-      tanggal_mulai: form.tanggal_mulai, tanggal_selesai: form.tanggal_selesai || null, kelas_ids: form.kelas_ids };
+    const payload = {
+      nama_kegiatan: form.nama_kegiatan,
+      nominal: parseFloat(form.nominal),
+      deskripsi: "",
+      status: editingKeg?.status ?? "pending",
+      tanggal_mulai: form.tanggal_mulai,
+      tanggal_selesai: form.tanggal_selesai || undefined,
+      kelas_ids: form.kelas_ids,
+    };
     try {
       if (editingKeg) {
         const { error } = await db.updateKegiatanAdministrasi(editingKeg.id, payload);
@@ -123,7 +131,7 @@ export default function KegiatanAdministrasi() {
   };
 
   const openDetail = async (keg: Kegiatan) => {
-    setSelectedKeg(keg); setDetail(null); setSearchDetail(""); setPaymentFilter("all"); setDetailOpen(true); setDetailLoading(true);
+    setSelectedKeg(keg); setDetail(null); setSearchDetail(""); setKelasFilter("all"); setPaymentFilter("all"); setDetailOpen(true); setDetailLoading(true);
     try {
       // Fetch tagihan + siswa + kelas sekaligus
       const { data: tagihanRows, error: tErr } = await supabase
@@ -188,6 +196,7 @@ export default function KegiatanAdministrasi() {
   };
 
   const filteredSiswa = (detail?.siswaList ?? [])
+    .filter(s => kelasFilter === "all" || s.kelas_nama === kelasFilter)
     .filter(s => s.nama.toLowerCase().includes(searchDetail.toLowerCase()) || s.nis.includes(searchDetail))
     .filter(s => {
       if (paymentFilter === "paid")    return s.status === "paid";
@@ -208,6 +217,8 @@ export default function KegiatanAdministrasi() {
     sortCol === col
       ? (sortAsc ? <ChevronUp size={11}/> : <ChevronDown size={11}/>)
       : <ChevronDown size={11} className="opacity-25"/>;
+
+  const kelasOptions = Array.from(new Set((detail?.siswaList ?? []).map((s) => s.kelas_nama).filter(Boolean)));
 
   if (loading) return (
     <div className="flex items-center justify-center h-full">
@@ -441,11 +452,23 @@ export default function KegiatanAdministrasi() {
                         Daftar Siswa
                         <span className="text-gray-400 font-normal text-xs ml-1.5">({filteredSiswa.length} ditampilkan)</span>
                       </p>
-                      <div className="relative w-52 shrink-0">
-                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
-                        <input value={searchDetail} onChange={e => setSearchDetail(e.target.value)}
-                          placeholder="Cari nama / NIS..."
-                          className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"/>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <select
+                          value={kelasFilter}
+                          onChange={(e) => setKelasFilter(e.target.value)}
+                          className="w-44 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                        >
+                          <option value="all">Semua Kelas</option>
+                          {kelasOptions.map((namaKelas) => (
+                            <option key={namaKelas} value={namaKelas}>{namaKelas}</option>
+                          ))}
+                        </select>
+                        <div className="relative w-52 shrink-0">
+                          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+                          <input value={searchDetail} onChange={e => setSearchDetail(e.target.value)}
+                            placeholder="Cari nama / NIS..."
+                            className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"/>
+                        </div>
                       </div>
                     </div>
                     {/* Filter status */}
