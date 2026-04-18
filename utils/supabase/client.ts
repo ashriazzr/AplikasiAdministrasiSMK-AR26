@@ -105,6 +105,53 @@ const deriveLegacyTingkat = (namaKelas: string): string => {
   return namaKelas.trim() || "X";
 };
 
+const syncTagihanForSiswaKelas = async (siswaId: string, kelasId?: string | null) => {
+  if (!kelasId) return;
+
+  const { data: kegiatanRows, error } = await supabase
+    .from("kegiatan_kelas")
+    .select("kegiatan_id, kegiatan:kegiatan_id (id, nominal)")
+    .eq("kelas_id", kelasId);
+
+  if (error) return;
+
+  const kegiatanList = (kegiatanRows || [])
+    .map((row: any) => row.kegiatan)
+    .filter(Boolean) as Array<{ id: string; nominal?: number }>;
+
+  if (kegiatanList.length === 0) return;
+
+  const bulan = new Date().getMonth() + 1;
+  const tahun = new Date().getFullYear();
+  const tanggalJatuhTempo = new Date();
+  tanggalJatuhTempo.setDate(tanggalJatuhTempo.getDate() + 30);
+
+  const existingTagihan = await supabase
+    .from("tagihan")
+    .select("id, kegiatan_id")
+    .eq("siswa_id", siswaId)
+    .in("kegiatan_id", kegiatanList.map((item) => item.id));
+
+  if (existingTagihan.error) return;
+
+  const existingKegiatanIds = new Set((existingTagihan.data || []).map((row: any) => row.kegiatan_id));
+  const newRows = kegiatanList
+    .filter((kegiatan) => !existingKegiatanIds.has(kegiatan.id))
+    .map((kegiatan) => ({
+      siswa_id: siswaId,
+      kegiatan_id: kegiatan.id,
+      bulan,
+      tahun,
+      jumlah: Number(kegiatan.nominal || 0),
+      status: "pending" as const,
+      tanggal_jatuh_tempo: tanggalJatuhTempo.toISOString().split("T")[0],
+    }));
+
+  if (newRows.length > 0) {
+    await supabase.from("tagihan").insert(newRows);
+  }
+};
+
 export interface Kelas { id: string; nama_kelas?: string; wali_kelas: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
 export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; created_at: string; updated_at: string; }
 export interface Administrasi { id: string; user_id?: string; nama: string; email: string; jabatan: string; telepon: string; tanggal_bergabung: string; created_at: string; updated_at: string; }
@@ -187,7 +234,11 @@ export const db = {
       tanggal_lahir: siswa.tanggal_lahir ? siswa.tanggal_lahir : null,
       rfid_card: siswa.rfid_card ? siswa.rfid_card : null,
     };
-    return supabase.from("siswa").insert([payload]).select().single();
+    const result = await supabase.from("siswa").insert([payload]).select().single();
+    if (result.data?.id) {
+      await syncTagihanForSiswaKelas(result.data.id, result.data.kelas_id ?? payload.kelas_id);
+    }
+    return result;
   },
   async updateSiswa(id: string, siswa: Partial<Siswa>) {
     const payload = {
@@ -199,7 +250,12 @@ export const db = {
         ? { rfid_card: siswa.rfid_card ? siswa.rfid_card : null }
         : {}),
     };
-    return supabase.from("siswa").update(payload).eq("id", id).select().single();
+    const result = await supabase.from("siswa").update(payload).eq("id", id).select().single();
+    const kelasId = (result.data as { kelas_id?: string } | null)?.kelas_id ?? payload.kelas_id ?? null;
+    if (result.data?.id) {
+      await syncTagihanForSiswaKelas(result.data.id, kelasId);
+    }
+    return result;
   },
   async deleteSiswa(id: string) { const { error } = await supabase.from("siswa").delete().eq("id", id); return { error }; },
   async getSiswaWithoutRFID() { return supabase.from("siswa").select("*").or("rfid_card.is.null,rfid_card.eq."); },
