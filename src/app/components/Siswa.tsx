@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
+import { StudentName } from "./ui/student-name";
 import { Plus, Edit, Trash2, Search, Users, School, CreditCard, Upload } from "lucide-react";
 import { db, type Siswa as SiswaType, type Kelas as KelasType } from "../../../utils/supabase/client";
 import { toast } from "sonner";
@@ -665,7 +666,9 @@ export default function Siswa() {
                         <tr key={siswa.id} className="border-b hover:bg-gray-50">
                           <td className="p-3">{siswa.nis}</td>
                           <td className="p-3">{siswa.nisn}</td>
-                          <td className={`p-3 font-medium ${siswa.status_siswa === "pindahan" ? "text-red-600" : ""}`}>{siswa.nama}</td>
+                          <td className="p-3 font-medium">
+                            <StudentName name={siswa.nama} status={siswa.status_siswa} />
+                          </td>
                           <td className="p-3">
                             <Badge variant="outline">{getKelasName(siswa.kelas_id)}</Badge>
                           </td>
@@ -760,7 +763,9 @@ export default function Siswa() {
                           >
                             <div className="flex justify-between items-start mb-2">
                               <div>
-                                <h3 className={`font-medium ${siswa.status_siswa === "pindahan" ? "text-red-600" : "text-gray-800"}`}>{siswa.nama}</h3>
+                                <h3 className="font-medium text-gray-800">
+                                  <StudentName name={siswa.nama} status={siswa.status_siswa} />
+                                </h3>
                                 <p className="text-sm text-gray-500">NIS: {siswa.nis}</p>
                               </div>
                               <Badge variant={siswa.jenis_kelamin === "Laki-laki" ? "default" : "secondary"}>

@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
+import { StudentName } from "./ui/student-name";
 import {
   Download, Search, Calendar, FileSpreadsheet,
   Edit2, Trash2, AlertCircle, ChevronLeft, ChevronRight,
@@ -530,7 +531,7 @@ export default function RiwayatPembayaran() {
                         <td className="px-4 py-3 text-slate-600 whitespace-nowrap text-xs">{formatDate(r.tanggal)}</td>
                         <td className="px-4 py-3 text-slate-500 font-mono text-xs">{r.nis}</td>
                         <td className="px-4 py-3">
-                          <span className={`font-semibold ${r.status_siswa === "pindahan" ? "text-red-600" : "text-slate-800"}`}>{r.nama_siswa}</span>
+                          <StudentName name={r.nama_siswa} status={r.status_siswa} className="font-semibold text-slate-800" />
                         </td>
                         <td className="px-4 py-3">
                           <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium whitespace-nowrap">

@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { StudentName } from "./ui/student-name";
 import {
   Edit, Trash2, AlertCircle, Clock, FileText,
   Calendar, User, GraduationCap, Search,
@@ -367,7 +368,9 @@ export default function Tagihan() {
             <div className="mt-3 p-3 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-between gap-2">
               <div>
                 <p className="text-xs text-blue-600">Siswa dipilih</p>
-                <p className={`text-sm font-semibold ${selectedSiswaData?.status_siswa === "pindahan" ? "text-red-600" : "text-slate-800"}`}>{selectedSiswaData?.nama} ({selectedSiswaData?.nis})</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  <StudentName name={selectedSiswaData?.nama} status={selectedSiswaData?.status_siswa} /> ({selectedSiswaData?.nis})
+                </p>
               </div>
               <Button
                 type="button"
@@ -422,7 +425,9 @@ export default function Tagihan() {
                               onClick={() => setSelectedSiswa(row.siswa_id)}
                               className="text-left"
                             >
-                              <p className={`font-semibold hover:text-blue-800 underline underline-offset-2 ${row.status_siswa === "pindahan" ? "text-red-600" : "text-blue-700"}`}>{row.nama}</p>
+                              <p className="font-semibold text-blue-700 hover:text-blue-800 underline underline-offset-2">
+                                <StudentName name={row.nama} status={row.status_siswa} transferClassName="text-red-600" />
+                              </p>
                               <p className="text-xs text-slate-400">{row.nis}</p>
                             </button>
                           </td>
@@ -478,7 +483,9 @@ export default function Tagihan() {
                   {selectedSiswaData?.nama.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className={`font-semibold text-sm ${selectedSiswaData?.status_siswa === "pindahan" ? "text-red-300" : "text-white"}`}>{selectedSiswaData?.nama}</p>
+                  <p className="font-semibold text-sm text-white">
+                    <StudentName name={selectedSiswaData?.nama} status={selectedSiswaData?.status_siswa} transferClassName="text-red-300" />
+                  </p>
                   <p className="text-slate-400 text-xs">{selectedSiswaData?.nis}</p>
                 </div>
               </div>
@@ -706,8 +713,8 @@ export default function Tagihan() {
               {editingPembayaran ? "Edit Pembayaran" : "Input Pembayaran Baru"}
             </DialogTitle>
             {selectedSiswaData && (
-              <DialogDescription className={`text-sm font-semibold flex items-center gap-1.5 mt-1 ${selectedSiswaData.status_siswa === "pindahan" ? "text-red-600" : "text-blue-600"}`}>
-                <User className="w-4 h-4" /> {selectedSiswaData.nama}
+              <DialogDescription className="text-sm text-blue-600 font-semibold flex items-center gap-1.5 mt-1">
+                <User className="w-4 h-4" /> <StudentName name={selectedSiswaData.nama} status={selectedSiswaData.status_siswa} />
               </DialogDescription>
             )}
           </DialogHeader>

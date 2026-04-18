@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Plus, Edit, Trash2, Search } from "lucide-react";
 import { Checkbox } from "./ui/checkbox";
 import { ScrollArea } from "./ui/scroll-area";
+import { StudentName } from "./ui/student-name";
 import { db } from "../../../utils/supabase/client";
 import { toast } from "sonner";
 
@@ -298,9 +299,9 @@ export default function Kelas() {
                                 />
                                 <label
                                   htmlFor={`siswa_${siswa.id}`}
-                                  className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer ${siswa.status_siswa === "pindahan" ? "text-red-600" : ""}`}
+                                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                                 >
-                                  {siswa.nama} ({siswa.nis})
+                                  <StudentName name={siswa.nama} status={siswa.status_siswa} /> ({siswa.nis})
                                 </label>
                               </div>
                             ))}
