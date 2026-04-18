@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS siswa (
   tanggal_lahir DATE,
   alamat TEXT,
   asal_sekolah VARCHAR(200),
+  du_di VARCHAR(200),
   rfid_card VARCHAR(100) UNIQUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS siswa (
 -- Add missing columns to siswa table if they don't exist
 ALTER TABLE IF EXISTS siswa ADD COLUMN IF NOT EXISTS nisn VARCHAR(50);
 ALTER TABLE IF EXISTS siswa ADD COLUMN IF NOT EXISTS asal_sekolah VARCHAR(200);
+ALTER TABLE IF EXISTS siswa ADD COLUMN IF NOT EXISTS du_di VARCHAR(200);
 
 -- Create administrasi table
 CREATE TABLE IF NOT EXISTS administrasi (

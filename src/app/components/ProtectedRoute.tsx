@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
+import { isLoggedInSession, isRestrictedSession } from "../lib/auth";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -7,11 +8,13 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const isLoggedIn = sessionStorage.getItem("is_logged_in");
+    const isLoggedIn = isLoggedInSession();
+    const isRestricted = isRestrictedSession();
 
     if (!isLoggedIn) {
       // User is not logged in, redirect to login page
@@ -19,10 +22,15 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
       return;
     }
 
+    if (isRestricted && location.pathname !== "/") {
+      navigate("/", { replace: true });
+      return;
+    }
+
     // User is logged in, allow access
     setIsAuthorized(true);
     setIsLoading(false);
-  }, [navigate]);
+  }, [location.pathname, navigate]);
 
   if (isLoading) {
     return (

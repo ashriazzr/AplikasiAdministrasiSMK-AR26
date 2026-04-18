@@ -1,22 +1,27 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
 import { LayoutDashboard, Users, GraduationCap, School, FileText, Wallet, History, CreditCard, BarChart3, Menu, X, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
+import { SESSION_KEYS, isRestrictedSession } from "../lib/auth";
 
 export default function Root() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [adminName, setAdminName] = useState("Admin");
+  const [restrictedAccess, setRestrictedAccess] = useState(false);
 
   // Check if user is logged in
   useEffect(() => {
-    const isLoggedIn = sessionStorage.getItem("is_logged_in");
-    const adminName = sessionStorage.getItem("admin_name");
+    const isLoggedIn = sessionStorage.getItem(SESSION_KEYS.isLoggedIn);
+    const adminName = sessionStorage.getItem(SESSION_KEYS.adminName);
+    const restricted = isRestrictedSession();
 
     if (!isLoggedIn) {
       navigate("/login");
       return;
     }
+
+    setRestrictedAccess(restricted);
 
     if (adminName) {
       setAdminName(adminName);
@@ -25,10 +30,11 @@ export default function Root() {
 
   const handleLogout = () => {
     // Clear sessionStorage
-    sessionStorage.removeItem("admin_id");
-    sessionStorage.removeItem("admin_name");
-    sessionStorage.removeItem("admin_email");
-    sessionStorage.removeItem("is_logged_in");
+    sessionStorage.removeItem(SESSION_KEYS.adminId);
+    sessionStorage.removeItem(SESSION_KEYS.adminName);
+    sessionStorage.removeItem(SESSION_KEYS.adminEmail);
+    sessionStorage.removeItem(SESSION_KEYS.isLoggedIn);
+    sessionStorage.removeItem(SESSION_KEYS.accessLevel);
 
     // Redirect to login
     navigate("/login");
@@ -50,7 +56,7 @@ export default function Root() {
     { path: "/riwayat-pembayaran", label: "Riwayat Pembayaran", icon: History },
     { path: "/rfid-scanner", label: "RFID Scanner", icon: CreditCard },
     { path: "/rombel", label: "Rombel", icon: School },
-  ];
+  ].filter((item) => !restrictedAccess || item.path === "/");
   
   return (
     <div className="flex h-screen bg-gray-50">
@@ -61,7 +67,7 @@ export default function Root() {
           {sidebarOpen && (
             <div className="flex-1">
               <h1 className="text-lg font-bold text-blue-600 truncate">Sistem Administrasi</h1>
-              <p className="text-xs text-gray-500 mt-1 truncate">Manajemen Sekolah</p>
+              <p className="text-xs text-gray-500 mt-1 truncate">{restrictedAccess ? "Informasi Kegiatan PKL" : "Manajemen Sekolah"}</p>
             </div>
           )}
           <button
@@ -103,7 +109,7 @@ export default function Root() {
             <div className="space-y-2">
               <div className="text-sm">
                 <p className="font-semibold text-gray-800 truncate">{adminName}</p>
-                <p className="text-xs text-gray-500 truncate">Administrator</p>
+                <p className="text-xs text-gray-500 truncate">{restrictedAccess ? "Akses Terbatas" : "Administrator"}</p>
               </div>
               <button
                 onClick={handleLogout}

@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Users, GraduationCap, School, TrendingUp, DollarSign, AlertCircle, CheckCircle } from "lucide-react";
+import { Users, GraduationCap, School, TrendingUp, DollarSign, AlertCircle, CheckCircle, FileText, ShieldAlert, Info } from "lucide-react";
 import { db, isSupabaseConfigured, isSupabaseConfigError, supabaseConfigErrorMessage } from "../../../utils/supabase/client";
 import { toast } from "sonner";
 import { LayoutWrapper } from "./LayoutWrapper";
+import { isRestrictedSession } from "../lib/auth";
 
 interface Stats {
   totalAdministrasi: number;
@@ -31,7 +32,18 @@ interface RecentTransaction {
   tanggal_bayar: string;
 }
 
+interface RestrictedKegiatan {
+  id: string;
+  nama_kegiatan: string;
+  nominal: number;
+  deskripsi?: string;
+  tanggal_mulai?: string;
+  tanggal_selesai?: string;
+  status?: string;
+}
+
 export default function Dashboard() {
+  const isRestricted = isRestrictedSession();
   const [stats, setStats] = useState<Stats | null>({
     totalAdministrasi: 0,
     totalSiswa: 0,
@@ -47,6 +59,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [kelasData, setKelasData] = useState<any[]>([]);
   const [configWarning, setConfigWarning] = useState<string>("");
+  const [restrictedKegiatan, setRestrictedKegiatan] = useState<RestrictedKegiatan[]>([]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -55,11 +68,54 @@ export default function Dashboard() {
       return;
     }
 
+    if (isRestricted) {
+      fetchRestrictedDashboard();
+      return;
+    }
+
     fetchStats();
     fetchKelas();
     fetchCashflowData();
     fetchRecentTransactions();
   }, []);
+
+  const fetchRestrictedDashboard = async () => {
+    try {
+      const { data, error } = await db.getKegiatanAdministrasi();
+
+      if (error) {
+        if (isSupabaseConfigError(error)) {
+          setConfigWarning(supabaseConfigErrorMessage);
+          return;
+        }
+
+        toast.error("Gagal memuat data kegiatan: " + error.message);
+        return;
+      }
+
+      const kegiatanList = ((data || []) as any[])
+        .filter((item) => String(item.nama_kegiatan || "").toLowerCase().includes("pkl"))
+        .map((item) => ({
+          id: item.id,
+          nama_kegiatan: item.nama_kegiatan,
+          nominal: Number(item.nominal || 0),
+          deskripsi: item.deskripsi,
+          tanggal_mulai: item.tanggal_mulai,
+          tanggal_selesai: item.tanggal_selesai,
+          status: item.status,
+        }));
+
+      setRestrictedKegiatan(kegiatanList);
+    } catch (error) {
+      if (isSupabaseConfigError(error)) {
+        setConfigWarning(supabaseConfigErrorMessage);
+        return;
+      }
+      toast.error("Error fetching kegiatan PKL: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -312,6 +368,94 @@ export default function Dashboard() {
       <div className="flex items-center justify-center h-full">
         <div className="text-xl text-gray-500">Memuat data...</div>
       </div>
+    );
+  }
+
+  if (isRestricted) {
+    return (
+      <LayoutWrapper title="Dashboard Informasi PKL" subtitle="Akun terbatas hanya untuk melihat informasi kegiatan PKL">
+        {configWarning && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <p className="font-semibold">Konfigurasi Supabase belum lengkap</p>
+            <p className="text-sm mt-1">{configWarning}</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-1 border-slate-200 shadow-sm">
+            <CardHeader className="space-y-2">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
+              <CardTitle className="text-base">Akses Terbatas</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-600">
+              <p>Akun ini hanya dapat melihat dashboard informasi kegiatan PKL.</p>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="font-medium text-slate-800">Tidak tersedia</p>
+                <p className="mt-1">CRUD Administrasi, Kegiatan, Tagihan, Pembayaran, Cashflow, dan menu lain.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2 border-slate-200 shadow-sm">
+            <CardHeader className="space-y-2">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <FileText className="h-5 w-5" />
+              </div>
+              <CardTitle className="text-base">Kegiatan PKL</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {restrictedKegiatan.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {restrictedKegiatan.map((kegiatan) => (
+                    <div key={kegiatan.id} className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Informasi kegiatan</p>
+                          <h3 className="mt-1 text-lg font-bold text-slate-900">{kegiatan.nama_kegiatan}</h3>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                          {kegiatan.status || "Aktif"}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 text-sm text-slate-700 sm:grid-cols-2">
+                        <div className="rounded-lg bg-white p-3 ring-1 ring-emerald-100">
+                          <p className="text-xs text-slate-500">Nominal</p>
+                          <p className="mt-1 font-semibold">{formatCurrency(kegiatan.nominal)}</p>
+                        </div>
+                        <div className="rounded-lg bg-white p-3 ring-1 ring-emerald-100">
+                          <p className="text-xs text-slate-500">Periode</p>
+                          <p className="mt-1 font-semibold">
+                            {kegiatan.tanggal_mulai ? formatDate(kegiatan.tanggal_mulai) : "-"}
+                            {kegiatan.tanggal_selesai ? ` - ${formatDate(kegiatan.tanggal_selesai)}` : ""}
+                          </p>
+                        </div>
+                      </div>
+
+                      {kegiatan.deskripsi && (
+                        <div className="mt-3 rounded-lg bg-white p-3 ring-1 ring-emerald-100">
+                          <p className="text-xs text-slate-500">Deskripsi</p>
+                          <p className="mt-1 text-sm text-slate-700">{kegiatan.deskripsi}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-slate-500">
+                  <div>
+                    <Info className="mx-auto h-6 w-6 text-slate-400" />
+                    <p className="mt-2 font-medium text-slate-700">Belum ada kegiatan PKL</p>
+                    <p className="mt-1 text-sm">Dashboard ini hanya menampilkan kegiatan dengan nama mengandung PKL.</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </LayoutWrapper>
     );
   }
 

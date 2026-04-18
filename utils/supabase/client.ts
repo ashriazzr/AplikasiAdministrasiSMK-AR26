@@ -195,7 +195,7 @@ const syncTagihanForSiswaKelas = async (siswaId: string, kelasId?: string | null
 };
 
 export interface Kelas { id: string; nama_kelas?: string; wali_kelas: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
-export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; status_siswa?: "aktif" | "pindahan" | "keluar"; created_at: string; updated_at: string; }
+export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; du_di?: string; rfid_card: string; status_siswa?: "aktif" | "pindahan" | "keluar"; created_at: string; updated_at: string; }
 export interface Administrasi { id: string; user_id?: string; nama: string; email: string; jabatan: string; telepon: string; tanggal_bergabung: string; created_at: string; updated_at: string; }
 export interface Tagihan { id: string; siswa_id: string; kegiatan_id: string; jumlah: number; status: "pending" | "paid" | "overdue"; tanggal_jatuh_tempo: string; created_at: string; updated_at: string; }
 export interface Pembayaran { id: string; tagihan_id: string; siswa_id: string; jumlah: number; metode_pembayaran: string; tanggal_pembayaran: string; bukti_pembayaran: string; dicatat_oleh?: string; cetak_struk?: boolean; nomor_struk?: string; created_at: string; updated_at: string; }

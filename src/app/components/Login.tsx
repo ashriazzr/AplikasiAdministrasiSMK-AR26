@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Loader2, Mail, Sparkles, User } from "lucide-react";
+import { RESTRICTED_ACCOUNT, SESSION_KEYS, isRestrictedAccount } from "../lib/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -24,13 +25,16 @@ export default function Login() {
       return;
     }
 
-    const adminId = `admin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    sessionStorage.setItem("admin_id", adminId);
-    sessionStorage.setItem("admin_name", name);
-    sessionStorage.setItem("admin_email", email);
-    sessionStorage.setItem("is_logged_in", "true");
+    const restrictedUser = isRestrictedAccount(email, name);
 
-    toast.success(`Selamat datang, ${name}`);
+    const adminId = `admin_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    sessionStorage.setItem(SESSION_KEYS.adminId, adminId);
+    sessionStorage.setItem(SESSION_KEYS.adminName, restrictedUser ? RESTRICTED_ACCOUNT.name : name);
+    sessionStorage.setItem(SESSION_KEYS.adminEmail, email.trim().toLowerCase());
+    sessionStorage.setItem(SESSION_KEYS.isLoggedIn, "true");
+    sessionStorage.setItem(SESSION_KEYS.accessLevel, restrictedUser ? RESTRICTED_ACCOUNT.role : "full");
+
+    toast.success(`Selamat datang, ${restrictedUser ? RESTRICTED_ACCOUNT.name : name}`);
     setTimeout(() => navigate("/"), 400);
     setIsLoading(false);
   };
@@ -90,6 +94,10 @@ export default function Login() {
               </div>
             </label>
 
+            <div className="rounded-lg border border-cyan-100 bg-cyan-50/70 px-3 py-2 text-xs text-cyan-900">
+              Akun terbatas: {RESTRICTED_ACCOUNT.email} / {RESTRICTED_ACCOUNT.name}
+            </div>
+
             <button
               type="submit"
               disabled={isLoading}
@@ -115,10 +123,11 @@ export default function Login() {
               setEmail("admin@demo.local");
               setName("Admin Demo");
               setTimeout(() => {
-                sessionStorage.setItem("admin_id", `admin_${Date.now()}`);
-                sessionStorage.setItem("admin_name", "Admin Demo");
-                sessionStorage.setItem("admin_email", "admin@demo.local");
-                sessionStorage.setItem("is_logged_in", "true");
+                sessionStorage.setItem(SESSION_KEYS.adminId, `admin_${Date.now()}`);
+                sessionStorage.setItem(SESSION_KEYS.adminName, "Admin Demo");
+                sessionStorage.setItem(SESSION_KEYS.adminEmail, "admin@demo.local");
+                sessionStorage.setItem(SESSION_KEYS.isLoggedIn, "true");
+                sessionStorage.setItem(SESSION_KEYS.accessLevel, "full");
                 toast.success("Selamat datang, Admin Demo");
                 navigate("/");
               }, 250);

@@ -42,6 +42,7 @@ export default function Siswa() {
     tanggal_lahir: "",
     alamat: "",
     asal_sekolah: "",
+    du_di: "",
     rfid_card: "",
   });
 
@@ -143,6 +144,7 @@ export default function Siswa() {
       tanggal_lahir: siswa.tanggal_lahir,
       alamat: siswa.alamat,
       asal_sekolah: siswa.asal_sekolah,
+      du_di: siswa.du_di || "",
       rfid_card: siswa.rfid_card || "",
     });
     setDialogOpen(true);
@@ -160,6 +162,7 @@ export default function Siswa() {
       tanggal_lahir: "",
       alamat: "",
       asal_sekolah: "",
+      du_di: "",
       rfid_card: "",
     });
   };
@@ -313,6 +316,7 @@ export default function Siswa() {
         const tanggalLahir = toDateYmd(normalizedRow["tanggallahir"] ?? normalizedRow["tglahir"]);
         const alamat = pickValue(normalizedRow, ["alamat"]);
         const asalSekolah = pickValue(normalizedRow, ["asalsekolah", "asalsekolahasal"]);
+        const duDi = pickValue(normalizedRow, ["dudi", "tempatpkl", "tempatkerjapraktik", "dualdipol", "dualan"]);
         const statusSiswaRaw = pickValue(normalizedRow, ["statussiswa", "status"]);
         const rfidCard = pickValue(normalizedRow, ["rfid", "rfidcard", "uidrfid"]);
 
@@ -358,6 +362,7 @@ export default function Siswa() {
           tanggal_lahir: tanggalLahir,
           alamat,
           asal_sekolah: asalSekolah,
+          du_di: duDi,
           rfid_card: rfidCard,
         });
 
@@ -442,7 +447,7 @@ export default function Siswa() {
                     {isImporting ? "Mengimpor..." : "Impor Excel"}
                   </Button>
                   <span className="text-xs text-gray-500 hidden md:inline">
-                    Wajib: nama, kelas, jenis kelamin
+                    Wajib: nama, kelas, jenis kelamin. DU/DI opsional
                   </span>
 
                   <Dialog open={dialogOpen} onOpenChange={(open) => {
@@ -583,6 +588,15 @@ export default function Siswa() {
                           />
                         </div>
                         <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="du_di">DU/DI</Label>
+                          <Input
+                            id="du_di"
+                            placeholder="Nama tempat PKL / DU/DI"
+                            value={formData.du_di}
+                            onChange={(e) => setFormData({ ...formData, du_di: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
                           <Label htmlFor="rfid_card">UID RFID</Label>
                           <Input
                             id="rfid_card"
@@ -657,6 +671,7 @@ export default function Siswa() {
                         <th className="text-left p-3 font-medium text-gray-700">Kelas</th>
                         <th className="text-left p-3 font-medium text-gray-700">Status</th>
                         <th className="text-left p-3 font-medium text-gray-700">Asal Sekolah</th>
+                        <th className="text-left p-3 font-medium text-gray-700">DU/DI</th>
                         <th className="text-left p-3 font-medium text-gray-700">Jenis Kelamin</th>
                         <th className="text-right p-3 font-medium text-gray-700">Aksi</th>
                       </tr>
@@ -680,6 +695,7 @@ export default function Siswa() {
                             </Badge>
                           </td>
                           <td className="p-3">{siswa.asal_sekolah}</td>
+                          <td className="p-3">{siswa.du_di || "-"}</td>
                           <td className="p-3">{siswa.jenis_kelamin}</td>
                           <td className="p-3">
                             <div className="flex gap-2 justify-end">
@@ -776,6 +792,7 @@ export default function Siswa() {
                               <p>🎂 {new Date(siswa.tanggal_lahir).toLocaleDateString('id-ID')}</p>
                               <p>📌 Status: {(siswa.status_siswa || "aktif").toUpperCase()}</p>
                               <p className="truncate">📍 {siswa.alamat}</p>
+                              <p className="truncate">🏭 DU/DI: {siswa.du_di || "-"}</p>
                             </div>
                             <div className="flex gap-2 mt-3">
                               <Button
