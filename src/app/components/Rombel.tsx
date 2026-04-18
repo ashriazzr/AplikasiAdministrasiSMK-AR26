@@ -166,17 +166,8 @@ export default function Rombel() {
     fetchData();
   };
 
-  const normalizeImportKey = (key: string) => key.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-  const pickImportValue = (row: Record<string, unknown>, keys: string[]) => {
-    for (const key of keys) {
-      const value = row[key];
-      if (value !== undefined && value !== null && String(value).trim() !== "") {
-        return String(value).trim();
-      }
-    }
-    return "";
-  };
+  const normalizeKelasValue = (value?: string | null) =>
+    (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
   const handleImportSiswaText = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,12 +186,29 @@ export default function Rombel() {
     setIsImportingSiswa(true);
     try {
       const kelasById = new Set(kelasList.map((kelas) => kelas.id));
-      const kelasByName = new Map(
-        kelasList.map((kelas) => {
-          const nama = `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""}`.trim().toLowerCase();
-          return [String(kelas.nama_kelas || nama).toLowerCase(), kelas.id] as const;
-        })
-      );
+      const kelasByName = new Map<string, string>();
+
+      // Build flexible class-key index so import accepts variants like:
+      // "X TKJ 1", "X-TKJ-1", "x tkj1", or exact nama_kelas.
+      for (const kelas of kelasList) {
+        const tingkat = (kelas.kelas || kelas.tingkat || "").trim();
+        const jurusan = (kelas.jurusan || "").trim();
+        const nomor = (kelas.nomor_kelas || "").trim();
+        const namaKelas = (kelas.nama_kelas || "").trim();
+
+        const candidates = [
+          namaKelas,
+          `${tingkat} ${jurusan}`.trim(),
+          `${tingkat} ${jurusan} ${nomor}`.trim(),
+          `${tingkat}-${jurusan}`.trim(),
+          `${tingkat}-${jurusan}-${nomor}`.trim(),
+          `${tingkat}${jurusan}${nomor}`.trim(),
+        ].filter(Boolean);
+
+        for (const candidate of candidates) {
+          kelasByName.set(normalizeKelasValue(candidate), kelas.id);
+        }
+      }
 
       const generatedNisSet = new Set<string>();
       const generateUniqueNis = () => {
@@ -234,7 +242,17 @@ export default function Rombel() {
           if (kelasById.has(kelasInput)) {
             kelasId = kelasInput;
           } else {
-            kelasId = kelasByName.get(kelasInput.toLowerCase()) || "";
+            const normalizedKelasInput = normalizeKelasValue(kelasInput);
+            kelasId = kelasByName.get(normalizedKelasInput) || "";
+
+            // Backward compatibility: if DB still stores classes without nomor_kelas,
+            // allow matching base form by removing trailing class number (e.g. X TKJ 1 -> X TKJ).
+            if (!kelasId) {
+              const baseKelasInput = normalizedKelasInput.replace(/[0-9]+$/, "");
+              if (baseKelasInput) {
+                kelasId = kelasByName.get(baseKelasInput) || "";
+              }
+            }
           }
         }
 
@@ -277,7 +295,8 @@ export default function Rombel() {
       }
 
       if (failures.length > 0) {
-        toast.error(`Ada ${failures.length} data gagal diimpor.`);
+        const preview = failures.slice(0, 3).join(" | ");
+        toast.error(`Ada ${failures.length} data gagal diimpor. ${preview}`);
         console.error("Detail gagal impor siswa:", failures);
       }
     } catch (error) {

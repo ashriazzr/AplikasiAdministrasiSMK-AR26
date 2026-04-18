@@ -309,7 +309,7 @@ export default function Administrasi() {
                   Tambah Data
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="w-[95vw] max-w-2xl max-h-[92vh] overflow-hidden p-0">
                 <DialogHeader>
                   <DialogTitle>
                     {editingAdmin ? "Edit Data Administrasi" : "Tambah Data Administrasi"}
@@ -318,9 +318,9 @@ export default function Administrasi() {
                     {editingAdmin ? "Perbarui informasi administrasi" : "Masukkan informasi administrasi baru"}
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
+                <form onSubmit={handleSubmit} className="flex flex-col max-h-[92vh]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-6 py-4 overflow-y-auto">
+                    <div className="space-y-1.5">
                       <Label htmlFor="nama">Nama Lengkap</Label>
                       <Input
                         id="nama"
@@ -330,7 +330,7 @@ export default function Administrasi() {
                         required
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label htmlFor="email">Email</Label>
                       <Input
                         id="email"
@@ -341,11 +341,11 @@ export default function Administrasi() {
                         required
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5 md:col-span-2">
                       <Label htmlFor="jabatan">Jabatan</Label>
-                      <div className="space-y-2 rounded-lg border p-3">
+                      <div className="rounded-lg border p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                         {JABATAN_OPTIONS.map((option) => (
-                          <label key={option} className="flex items-center gap-3 cursor-pointer">
+                          <label key={option} className="flex items-center gap-2 cursor-pointer rounded-md px-2 py-1 hover:bg-gray-50">
                             <Checkbox
                               checked={formData.jabatan.includes(option)}
                               onCheckedChange={(checked: boolean | "indeterminate") => {
@@ -357,13 +357,13 @@ export default function Administrasi() {
                                 }));
                               }}
                             />
-                            <span className="text-sm">{option}</span>
+                            <span className="text-sm leading-none">{option}</span>
                           </label>
                         ))}
                       </div>
                       <p className="text-xs text-gray-500">1 data administrasi bisa punya lebih dari 1 jabatan.</p>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label htmlFor="telepon">Telepon</Label>
                       <Input
                         id="telepon"
@@ -374,7 +374,7 @@ export default function Administrasi() {
                       />
                       <p className="text-xs text-gray-500">Format: angka, +, -, spasi, atau ()</p>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label htmlFor="tanggal_bergabung">Tanggal Bergabung</Label>
                       <Input
                         id="tanggal_bergabung"
@@ -385,7 +385,7 @@ export default function Administrasi() {
                       />
                     </div>
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
                     <Button 
                       type="button" 
                       variant="outline" 
