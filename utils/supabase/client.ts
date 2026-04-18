@@ -181,8 +181,22 @@ export const db = {
   async getSiswaWithKelas() { const { data, error } = await supabase.from("siswa").select("*, kelas:kelas_id(id, nama_kelas, wali_kelas, jurusan, tahun_ajaran, created_at, updated_at)").order("nama"); return { data: data as SiswaWithKelas[] | null, error }; },
   async getSiswaById(id: string) { return supabase.from("siswa").select("*").eq("id", id).single(); },
   async getSiswaByRFID(rfidCard: string) { const { data, error } = await supabase.from("siswa").select("*").eq("rfid_card", rfidCard).maybeSingle(); return { data, error }; },
-  async createSiswa(siswa: Omit<Siswa, "id" | "created_at" | "updated_at">) { return supabase.from("siswa").insert([siswa]).select().single(); },
-  async updateSiswa(id: string, siswa: Partial<Siswa>) { return supabase.from("siswa").update(siswa).eq("id", id).select().single(); },
+  async createSiswa(siswa: Omit<Siswa, "id" | "created_at" | "updated_at">) {
+    const payload = {
+      ...siswa,
+      tanggal_lahir: siswa.tanggal_lahir ? siswa.tanggal_lahir : null,
+    };
+    return supabase.from("siswa").insert([payload]).select().single();
+  },
+  async updateSiswa(id: string, siswa: Partial<Siswa>) {
+    const payload = {
+      ...siswa,
+      ...(siswa.tanggal_lahir !== undefined
+        ? { tanggal_lahir: siswa.tanggal_lahir ? siswa.tanggal_lahir : null }
+        : {}),
+    };
+    return supabase.from("siswa").update(payload).eq("id", id).select().single();
+  },
   async deleteSiswa(id: string) { const { error } = await supabase.from("siswa").delete().eq("id", id); return { error }; },
   async getSiswaWithoutRFID() { return supabase.from("siswa").select("*").or("rfid_card.is.null,rfid_card.eq."); },
 
