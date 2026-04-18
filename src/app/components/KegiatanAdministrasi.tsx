@@ -195,9 +195,23 @@ export default function KegiatanAdministrasi() {
     if (sortCol === col) setSortAsc(p => !p); else { setSortCol(col); setSortAsc(false); }
   };
 
-  const filteredSiswa = (detail?.siswaList ?? [])
+  const visibleSiswa = (detail?.siswaList ?? [])
     .filter(s => kelasFilter === "all" || s.kelas_nama === kelasFilter)
     .filter(s => s.nama.toLowerCase().includes(searchDetail.toLowerCase()) || s.nis.includes(searchDetail))
+
+  const statusCounts = visibleSiswa.reduce(
+    (acc, siswa) => {
+      acc.all += 1;
+      if (siswa.status === "paid") acc.paid += 1;
+      if (siswa.status === "pending") acc.pending += 1;
+      if (siswa.status === "overdue") acc.overdue += 1;
+      if (siswa.status === "pending" || siswa.status === "overdue") acc.unpaid += 1;
+      return acc;
+    },
+    { all: 0, paid: 0, pending: 0, overdue: 0, unpaid: 0 }
+  );
+
+  const filteredSiswa = visibleSiswa
     .filter(s => {
       if (paymentFilter === "paid")    return s.status === "paid";
       if (paymentFilter === "pending") return s.status === "pending";
@@ -474,11 +488,11 @@ export default function KegiatanAdministrasi() {
                     {/* Filter status */}
                     <div className="flex items-center gap-2 flex-wrap">
                       {[
-                        { key: "all",     label: "Semua",        count: detail.siswaList.length,                               cls: "bg-gray-200 text-gray-700",    active: "bg-gray-800 text-white" },
-                        { key: "paid",    label: "✓ Lunas",      count: detail.jumlahLunas,                                    cls: "bg-emerald-100 text-emerald-700", active: "bg-emerald-600 text-white" },
-                        { key: "pending", label: "○ Belum Bayar",count: detail.jumlahPending,                                  cls: "bg-blue-100 text-blue-700",    active: "bg-blue-600 text-white" },
-                        { key: "overdue", label: "! Jatuh Tempo",count: detail.jumlahOverdue,                                  cls: "bg-red-100 text-red-600",      active: "bg-red-600 text-white" },
-                        { key: "unpaid",  label: "✗ Semua Belum",count: detail.jumlahPending + detail.jumlahOverdue,           cls: "bg-orange-100 text-orange-700", active: "bg-orange-600 text-white" },
+                        { key: "all",     label: "Semua",        count: statusCounts.all,                                      cls: "bg-gray-200 text-gray-700",    active: "bg-gray-800 text-white" },
+                        { key: "paid",    label: "✓ Lunas",      count: statusCounts.paid,                                     cls: "bg-emerald-100 text-emerald-700", active: "bg-emerald-600 text-white" },
+                        { key: "pending", label: "○ Belum Bayar",count: statusCounts.pending,                                  cls: "bg-blue-100 text-blue-700",    active: "bg-blue-600 text-white" },
+                        { key: "overdue", label: "! Jatuh Tempo",count: statusCounts.overdue,                                  cls: "bg-red-100 text-red-600",      active: "bg-red-600 text-white" },
+                        { key: "unpaid",  label: "✗ Semua Belum",count: statusCounts.unpaid,                                   cls: "bg-orange-100 text-orange-700", active: "bg-orange-600 text-white" },
                       ].map(f => (
                         <button
                           key={f.key}
