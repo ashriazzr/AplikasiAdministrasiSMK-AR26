@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -10,7 +11,6 @@ import { Checkbox } from "./ui/checkbox";
 import { Plus, Edit, Trash2, Search, Users, BookOpen, AlertCircle, CreditCard, Gift, Award, ShieldCheck, Upload } from "lucide-react";
 import { db, type Siswa as SiswaType, type Kelas as KelasType, type KegiatanAdministrasi as KegiatanType, type BeasiswaAdministrasi as BeasiswaType } from "../../../utils/supabase/client";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 
 interface Siswa extends SiswaType {
   kelas?: {
@@ -47,7 +47,8 @@ export default function Rombel() {
   const [beasiswaSearchSiswa, setBeasiswaSearchSiswa] = useState("");
   const [beasiswaSearchKegiatan, setBeasiswaSearchKegiatan] = useState("");
   const [isImportingSiswa, setIsImportingSiswa] = useState(false);
-  const siswaImportRef = useRef<HTMLInputElement | null>(null);
+  const [importSiswaDialogOpen, setImportSiswaDialogOpen] = useState(false);
+  const [importSiswaText, setImportSiswaText] = useState("");
 
   // Dialog states
   const [siswaDialogOpen, setSiswaDialogOpen] = useState(false);
@@ -175,29 +176,22 @@ export default function Rombel() {
     return "";
   };
 
-  const handleImportSiswaExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleImportSiswaText = async (e: React.FormEvent) => {
+    e.preventDefault();
 
     if (kelasList.length === 0) {
       toast.error("Data kelas belum tersedia. Tambahkan kelas terlebih dahulu.");
-      e.target.value = "";
+      return;
+    }
+
+    const rawText = importSiswaText.trim();
+    if (!rawText) {
+      toast.error("Tempel data siswa terlebih dahulu.");
       return;
     }
 
     setIsImportingSiswa(true);
     try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-
-      if (rows.length === 0) {
-        toast.error("File Excel kosong atau tidak memiliki data.");
-        return;
-      }
-
       const kelasById = new Set(kelasList.map((kelas) => kelas.id));
       const kelasByName = new Map(
         kelasList.map((kelas) => {
@@ -216,25 +210,29 @@ export default function Rombel() {
         return candidate;
       };
 
+      const lines = rawText
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => !/^nisn\s*,\s*nama/i.test(line));
+
       let successCount = 0;
       const failures: string[] = [];
 
-      for (let i = 0; i < rows.length; i++) {
-        const normalizedRow: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(rows[i])) {
-          normalizedRow[normalizeImportKey(key)] = value;
-        }
+      for (let i = 0; i < lines.length; i++) {
+        const parts = lines[i].split(",").map((part) => part.trim());
+        const [nisnRaw = "", namaRaw = "", kelasRaw = "", jenisKelaminRaw = ""] = parts;
 
-        const nama = pickImportValue(normalizedRow, ["nama", "namalengkap"]);
-        const kelasRaw = pickImportValue(normalizedRow, ["kelas", "kelasnama", "namakelas", "kelasid"]);
-        const jenisKelaminRaw = pickImportValue(normalizedRow, ["jeniskelamin", "gender", "jk"]);
+        const nama = namaRaw;
+        const kelasInput = kelasRaw;
+        const nisn = nisnRaw;
 
         let kelasId = "";
-        if (kelasRaw) {
-          if (kelasById.has(kelasRaw)) {
-            kelasId = kelasRaw;
+        if (kelasInput) {
+          if (kelasById.has(kelasInput)) {
+            kelasId = kelasInput;
           } else {
-            kelasId = kelasByName.get(kelasRaw.toLowerCase()) || "";
+            kelasId = kelasByName.get(kelasInput.toLowerCase()) || "";
           }
         }
 
@@ -242,27 +240,27 @@ export default function Rombel() {
           ? "Laki-laki"
           : /^p(erempuan)?/i.test(jenisKelaminRaw)
             ? "Perempuan"
-            : "";
+            : jenisKelaminRaw;
 
         if (!nama || !kelasId || !jenisKelamin) {
-          failures.push(`Baris ${i + 2}: nama, kelas, dan jenis kelamin wajib diisi`);
+          failures.push(`Baris ${i + 1}: nama, kelas, dan jenis kelamin wajib diisi`);
           continue;
         }
 
         const { error } = await db.createSiswa({
           nama,
           kelas_id: kelasId,
-          nis: pickImportValue(normalizedRow, ["nis"]) || generateUniqueNis(),
-          nisn: pickImportValue(normalizedRow, ["nisn"]),
+          nis: nisn || generateUniqueNis(),
+          nisn,
           jenis_kelamin: jenisKelamin,
-          tanggal_lahir: pickImportValue(normalizedRow, ["tanggallahir", "tglahir"]),
-          alamat: pickImportValue(normalizedRow, ["alamat"]),
-          asal_sekolah: pickImportValue(normalizedRow, ["asalsekolah", "asal"]),
-          rfid_card: pickImportValue(normalizedRow, ["rfid", "rfidcard", "uidrfid"]),
+          tanggal_lahir: "",
+          alamat: "",
+          asal_sekolah: "",
+          rfid_card: "",
         });
 
         if (error) {
-          failures.push(`Baris ${i + 2}: ${error.message}`);
+          failures.push(`Baris ${i + 1}: ${error.message}`);
           continue;
         }
 
@@ -272,6 +270,8 @@ export default function Rombel() {
       if (successCount > 0) {
         toast.success(`Impor selesai. ${successCount} data siswa berhasil ditambahkan.`);
         await fetchData();
+        setImportSiswaDialogOpen(false);
+        setImportSiswaText("");
       }
 
       if (failures.length > 0) {
@@ -279,11 +279,10 @@ export default function Rombel() {
         console.error("Detail gagal impor siswa:", failures);
       }
     } catch (error) {
-      console.error("Error importing siswa excel:", error);
-      toast.error("Gagal membaca file Excel.");
+      console.error("Error importing siswa text:", error);
+      toast.error("Gagal memproses data siswa.");
     } finally {
       setIsImportingSiswa(false);
-      e.target.value = "";
     }
   };
 
@@ -1118,21 +1117,14 @@ export default function Rombel() {
             <CardHeader className="flex flex-row items-center justify-between py-2.5 px-4">
               <CardTitle className="text-base">Manajemen Siswa</CardTitle>
               <div className="flex items-center gap-2">
-                <input
-                  ref={siswaImportRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  className="hidden"
-                  onChange={handleImportSiswaExcel}
-                />
                 <Button
                   variant="outline"
-                  onClick={() => siswaImportRef.current?.click()}
+                  onClick={() => setImportSiswaDialogOpen(true)}
                   disabled={isImportingSiswa}
                   className="h-8"
                 >
                   <Upload className="w-4 h-4 mr-2" />
-                  {isImportingSiswa ? "Mengimpor..." : "Impor Excel"}
+                  {isImportingSiswa ? "Mengimpor..." : "Import Data"}
                 </Button>
                 <Button
                   onClick={() => openSiswaForm()}
@@ -1390,6 +1382,64 @@ export default function Rombel() {
                 {editingSiswa ? "Perbarui" : "Simpan"}
               </Button>
             </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importSiswaDialogOpen} onOpenChange={setImportSiswaDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Import Siswa Massal</DialogTitle>
+            <DialogDescription>
+              Tempel data siswa per baris dengan format: NISN,Nama Lengkap,Kelas,Jenis Kelamin.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleImportSiswaText} className="space-y-5">
+            <div className="rounded-2xl bg-blue-50 p-5 text-blue-700">
+              <p className="font-semibold text-lg mb-2">Format per baris:</p>
+              <div className="inline-block rounded-md bg-blue-100 px-3 py-1 font-mono text-sm">
+                NISN,Nama Lengkap,Kelas,Jenis Kelamin
+              </div>
+              <div className="mt-4 space-y-2 text-sm font-medium font-mono">
+                <p>0012345601,Ahmad Rizki,X-1,Laki-laki</p>
+                <p>,Siti Nurhaliza,X-1,Perempuan</p>
+                <p>0012345603,Budi Santoso,XI-IPA-1,L</p>
+              </div>
+              <p className="mt-4 text-sm">NISN boleh kosong, tapi koma tetap harus ada.</p>
+              <p className="text-sm">Jenis kelamin boleh diisi L, Laki-laki, P, atau Perempuan.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Textarea
+                value={importSiswaText}
+                onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setImportSiswaText(event.target.value)}
+                placeholder="Paste data siswa di sini..."
+                className="min-h-[260px] font-mono text-sm"
+              />
+            </div>
+
+            <DialogFooter className="gap-3 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setImportSiswaDialogOpen(false);
+                  setImportSiswaText("");
+                }}
+                className="w-full sm:w-auto"
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+                disabled={isImportingSiswa}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                {isImportingSiswa ? "Importing..." : "Import Data"}
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
