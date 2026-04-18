@@ -96,7 +96,19 @@ const isMissingColumnsInSchemaCache = (error: unknown, columns: string[]): boole
           : "";
 
   const normalized = message.toLowerCase();
-  return normalized.includes("schema cache") && columns.some((column) => normalized.includes(`'${column.toLowerCase()}' column`));
+  return (
+    normalized.includes("schema cache") &&
+    columns.some((column) => {
+      const col = column.toLowerCase();
+      return (
+        normalized.includes(`'${col}' column`) ||
+        normalized.includes(`\"${col}\" column`) ||
+        normalized.includes(`${col} column`) ||
+        normalized.includes(`column '${col}'`) ||
+        normalized.includes(`column \"${col}\"`)
+      );
+    })
+  );
 };
 
 const getPostgrestErrorMessage = (error: unknown): string => {
@@ -267,10 +279,7 @@ export const db = {
     };
     let result = await supabase.from("siswa").insert([payload]).select().single();
     if (result.error && isMissingColumnsInSchemaCache(result.error, ["status_siswa"])) {
-      const fallbackPayload = {
-        ...payload,
-        status_siswa: undefined,
-      };
+      const { status_siswa, ...fallbackPayload } = payload as typeof payload & { status_siswa?: unknown };
       result = await supabase.from("siswa").insert([fallbackPayload]).select().single();
     }
     if (result.data?.id) {
