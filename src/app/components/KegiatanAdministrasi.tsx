@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
@@ -56,6 +57,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 export default function KegiatanAdministrasi() {
+  const navigate = useNavigate();
   const [kegiatan, setKegiatan]           = useState<Kegiatan[]>([]);
   const [kelas, setKelas]                 = useState<Kelas[]>([]);
   const [loading, setLoading]             = useState(true);
@@ -412,17 +414,30 @@ export default function KegiatanAdministrasi() {
         >
           {/* Row 1: Fixed Header — tidak ikut scroll */}
           <div className="px-6 pt-5 pb-4 border-b bg-white">
-            <DialogTitle className="text-lg font-bold">{selectedKeg?.nama_kegiatan}</DialogTitle>
-            <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
-              <span className="flex items-center gap-1.5"><DollarSign size={13}/>{rp(selectedKeg?.nominal ?? 0)} / siswa</span>
-              {selectedKeg?.tanggal_mulai && (
-                <span className="flex items-center gap-1.5"><Calendar size={13}/>{fmtDate(selectedKeg.tanggal_mulai)}
-                  {selectedKeg.tanggal_selesai ? ` — ${fmtDate(selectedKeg.tanggal_selesai)}` : ""}
-                </span>
-              )}
-              {detail && (
-                <span className="flex items-center gap-1.5"><Users size={13}/>{detail.siswaList.length} siswa</span>
-              )}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <DialogTitle className="text-lg font-bold truncate">{selectedKeg?.nama_kegiatan}</DialogTitle>
+                <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
+                  <span className="flex items-center gap-1.5"><DollarSign size={13}/>{rp(selectedKeg?.nominal ?? 0)} / siswa</span>
+                  {selectedKeg?.tanggal_mulai && (
+                    <span className="flex items-center gap-1.5"><Calendar size={13}/>{fmtDate(selectedKeg.tanggal_mulai)}
+                      {selectedKeg.tanggal_selesai ? ` — ${fmtDate(selectedKeg.tanggal_selesai)}` : ""}
+                    </span>
+                  )}
+                  {detail && (
+                    <span className="flex items-center gap-1.5"><Users size={13}/>{detail.siswaList.length} siswa</span>
+                  )}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 shrink-0"
+                disabled={!selectedKeg?.id}
+                onClick={() => navigate(`/cashflow?kegiatanId=${selectedKeg?.id}`)}
+              >
+                <TrendingUp size={12}/> Cashflow
+              </Button>
             </div>
           </div>
 

@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
-import { LayoutDashboard, Users, GraduationCap, School, FileText, Wallet, History, CreditCard, TrendingUp, BarChart3, Menu, X, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, GraduationCap, School, FileText, Wallet, History, CreditCard, BarChart3, Menu, X, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function Root() {
@@ -45,7 +45,6 @@ export default function Root() {
     { path: "/", label: "Dashboard", icon: LayoutDashboard },
     { path: "/administrasi", label: "Administrasi", icon: Users },
     { path: "/kegiatan-administrasi", label: "Kegiatan Administrasi", icon: FileText },
-    { path: "/cashflow", label: "Cashflow", icon: TrendingUp },
     { path: "/analytics", label: "Analytics & Reporting", icon: BarChart3 },
     { path: "/tagihan", label: "Tagihan & Pembayaran", icon: Wallet },
     { path: "/riwayat-pembayaran", label: "Riwayat Pembayaran", icon: History },

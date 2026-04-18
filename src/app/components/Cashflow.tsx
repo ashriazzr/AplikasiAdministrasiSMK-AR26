@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -25,6 +26,7 @@ const fmtDate = (s: string) => { if (!s) return "-"; const d = new Date(s); retu
 const COLOR_PRESETS = ["#10b981","#06b6d4","#ef4444","#f97316","#8b5cf6","#eab308","#6366f1","#14b8a6","#64748b","#ec4899"];
 
 export default function Cashflow() {
+  const [searchParams] = useSearchParams();
   const [kegiatan, setKegiatan]     = useState<KegiatanRow[]>([]);
   const [categories, setCategories] = useState<Kategori[]>([]);
   const [summaries, setSummaries]   = useState<Record<string, ActivitySummary>>({});
@@ -40,9 +42,19 @@ export default function Cashflow() {
   const [selKegId, setSelKegId]     = useState<string>("");
 
   const [txForm, setTxForm] = useState({ tanggal: new Date().toISOString().split("T")[0], jenis: "expense" as "income" | "expense", kategori_id: "", jumlah: "", deskripsi: "" });
-  const [catForm, setCatForm] = useState({ nama_kategori: "", jenis: "expense" as "income" | "expense", warna: "#10b981", icon: "tag" });
+  const [catForm, setCatForm] = useState({ nama_kategori: "", jenis: "expense" as "income" | "expense", warna: "#10b981", icon: "tag", urutan: 0 });
+
+  const kegiatanIdParam = searchParams.get("kegiatanId")?.trim() || "";
 
   useEffect(() => { loadAll(); }, []);
+
+  useEffect(() => {
+    if (loading || !kegiatanIdParam || kegiatan.length === 0) return;
+    const target = kegiatan.find((item) => item.id === kegiatanIdParam);
+    if (!target) return;
+    setDetailKegId(target.id);
+    setDetailOpen(true);
+  }, [loading, kegiatan, kegiatanIdParam]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -111,7 +123,7 @@ export default function Cashflow() {
       if (editingCat) { const { error } = await db.updateKategori(editingCat.id, catForm); if (error) throw error; toast.success("Kategori diperbarui"); }
       else { const { error } = await db.createKategori(catForm); if (error) throw error; toast.success("Kategori ditambahkan"); }
       const res = await db.getKategori(); setCategories((res.data as Kategori[]) || []);
-      setEditingCat(null); setCatForm({ nama_kategori: "", jenis: "expense", warna: "#10b981", icon: "tag" });
+      setEditingCat(null); setCatForm({ nama_kategori: "", jenis: "expense", warna: "#10b981", icon: "tag", urutan: 0 });
     } catch { toast.error("Gagal menyimpan kategori"); }
   };
 
@@ -151,11 +163,17 @@ export default function Cashflow() {
       <PageSection>
         {/* Action Buttons */}
         <div className="flex gap-2 justify-end">
+          {kegiatanIdParam && detailKg && (
+            <div className="mr-auto hidden md:flex items-center gap-2 text-sm text-gray-600">
+              <span className="text-gray-400">Kegiatan:</span>
+              <span className="font-semibold text-gray-900">{detailKg.nama_kegiatan}</span>
+            </div>
+          )}
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw size={14} className={`mr-1.5 ${refreshing ? "animate-spin" : ""}`}/>
             {refreshing ? "Memuat..." : "Perbarui"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori:"",jenis:"expense",warna:"#10b981",icon:"tag" }); setCatOpen(true); }}>
+          <Button variant="outline" size="sm" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori:"",jenis:"expense",warna:"#10b981",icon:"tag",urutan:0 }); setCatOpen(true); }}>
             <Settings size={14} className="mr-1.5"/> Kategori
           </Button>
         </div>
@@ -500,7 +518,7 @@ export default function Cashflow() {
                 </div>
                 <div className="flex gap-2 pt-1">
                   <Button onClick={handleSaveCat} className="flex-1">{editingCat ? "Perbarui" : "Tambah"}</Button>
-                  {editingCat && <Button variant="outline" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori:"",jenis:"expense",warna:"#10b981",icon:"tag" }); }}>Batal</Button>}
+                  {editingCat && <Button variant="outline" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori:"",jenis:"expense",warna:"#10b981",icon:"tag",urutan:0 }); }}>Batal</Button>}
                 </div>
               </div>
             </div>
@@ -518,7 +536,7 @@ export default function Cashflow() {
                           <div className="w-4 h-4 rounded shrink-0" style={{ background: cat.warna }}/>
                           <p className="text-sm font-medium flex-1">{cat.nama_kategori}</p>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingCat(cat); setCatForm({ nama_kategori: cat.nama_kategori, jenis: cat.jenis, warna: cat.warna, icon: cat.icon }); }}><Edit2 size={12}/></Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditingCat(cat); setCatForm({ nama_kategori: cat.nama_kategori, jenis: cat.jenis, warna: cat.warna, icon: cat.icon, urutan: cat.urutan ?? 0 }); }}><Edit2 size={12}/></Button>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDeleteCat(cat.id)}><Trash2 size={12}/></Button>
                           </div>
                         </div>
