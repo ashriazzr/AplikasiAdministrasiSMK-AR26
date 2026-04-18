@@ -82,7 +82,7 @@ export default function KegiatanAdministrasi() {
     try {
       const { data, error } = await db.getKegiatanAdministrasi();
       if (error) { toast.error("Gagal memuat: " + error.message); return; }
-      setKegiatan(data || []);
+      setKegiatan((data || []) as Kegiatan[]);
     } finally { setLoading(false); }
   };
   const fetchKelas = async () => { const { data } = await db.getKelas(); setKelas(data || []); };
@@ -117,11 +117,11 @@ export default function KegiatanAdministrasi() {
     };
     try {
       if (editingKeg) {
-        const { error } = await db.updateKegiatanAdministrasi(editingKeg.id, payload);
+        const { error } = await db.updateKegiatanAdministrasi(editingKeg.id, payload as any);
         if (error && !isDupe(error)) { toast.error(getErrMsg(error)); return; }
         toast.success(isDupe(error) ? "Diperbarui — tagihan duplikat diabaikan" : "Data berhasil diperbarui");
       } else {
-        const { error } = await db.createKegiatanAdministrasi(payload);
+        const { error } = await db.createKegiatanAdministrasi(payload as any);
         if (error && !isDupe(error)) { toast.error(getErrMsg(error)); return; }
         toast.success(isDupe(error) ? "Dibuat — tagihan duplikat diabaikan" : "Kegiatan dan tagihan berhasil dibuat");
       }
