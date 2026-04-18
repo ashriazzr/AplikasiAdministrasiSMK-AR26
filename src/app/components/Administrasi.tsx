@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { Checkbox } from "./ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Plus, Edit, Trash2, Search, Eye, Mail, Phone, Calendar, Briefcase, FileSpreadsheet, User } from "lucide-react";
@@ -21,6 +22,18 @@ interface Admin {
   updated_at?: string;
 }
 
+const JABATAN_OPTIONS = ["Guru", "Pembina OSIS", "Pembina Pramuka"];
+
+const parseJabatanList = (value: string) =>
+  value
+    .split(/[,;|\n]/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const serializeJabatanList = (items: string[]) => items.join(", ");
+
+const uniqueList = (items: string[]) => Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)));
+
 export default function Administrasi() {
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +46,7 @@ export default function Administrasi() {
   const [formData, setFormData] = useState({
     nama: "",
     email: "",
-    jabatan: "",
+    jabatan: [] as string[],
     telepon: "",
     tanggal_bergabung: "",
   });
@@ -72,15 +85,20 @@ export default function Administrasi() {
     }
 
     try {
+      const payload = {
+        ...formData,
+        jabatan: serializeJabatanList(formData.jabatan),
+      };
+
       if (editingAdmin) {
-        const { error } = await db.updateAdministrasi(editingAdmin.id, formData);
+        const { error } = await db.updateAdministrasi(editingAdmin.id, payload);
         if (error) {
           toast.error("Gagal mengupdate administrasi: " + error.message);
           return;
         }
         toast.success("✅ Data berhasil diperbarui");
       } else {
-        const { error } = await db.createAdministrasi(formData);
+        const { error } = await db.createAdministrasi(payload);
         if (error) {
           toast.error("Gagal membuat administrasi: " + error.message);
           return;
@@ -121,7 +139,7 @@ export default function Administrasi() {
     setFormData({
       nama: admin.nama,
       email: admin.email,
-      jabatan: admin.jabatan,
+      jabatan: parseJabatanList(admin.jabatan),
       telepon: admin.telepon,
       tanggal_bergabung: admin.tanggal_bergabung.split('T')[0],
     });
@@ -138,7 +156,7 @@ export default function Administrasi() {
     setFormData({
       nama: "",
       email: "",
-      jabatan: "",
+      jabatan: [],
       telepon: "",
       tanggal_bergabung: "",
     });
@@ -179,18 +197,21 @@ export default function Administrasi() {
   };
 
   const filteredAdmins = admins.filter((admin) => {
+    const jabatanText = parseJabatanList(admin.jabatan).join(" ");
     const matchesSearch = 
       admin.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
       admin.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      admin.jabatan.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      jabatanText.toLowerCase().includes(searchTerm.toLowerCase()) ||
       admin.telepon.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesJabatan = filterJabatan === "" || admin.jabatan === filterJabatan;
+    const matchesJabatan = filterJabatan === "" || parseJabatanList(admin.jabatan).includes(filterJabatan);
     
     return matchesSearch && matchesJabatan;
   });
 
-  const uniqueJabatan = [...new Set(admins.map(a => a.jabatan))].sort();
+  const uniqueJabatan = [...new Set(admins.flatMap((admin) => parseJabatanList(admin.jabatan)))].sort();
+
+  const formatJabatanDisplay = (jabatan: string) => parseJabatanList(jabatan).join(", ") || "-";
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('id-ID', {
@@ -202,15 +223,9 @@ export default function Administrasi() {
 
   const getJabatanColor = (jabatan: string) => {
     const colors: Record<string, string> = {
-      "Kepala Sekolah": "bg-purple-100 text-purple-800",
-      "Waka Kurikulum": "bg-blue-100 text-blue-800",
-      "Waka Kesiswaan": "bg-blue-100 text-blue-800",
-      "Waka Hubungan Industri": "bg-blue-100 text-blue-800",
-      "Waka Bimbingan Konseling": "bg-blue-100 text-blue-800",
-      "Operator": "bg-green-100 text-green-800",
-      "Staff TU": "bg-yellow-100 text-yellow-800",
-      "Bendahara": "bg-orange-100 text-orange-800",
-      "Sekretaris": "bg-pink-100 text-pink-800",
+      "Guru": "bg-blue-100 text-blue-800",
+      "Pembina OSIS": "bg-rose-100 text-rose-800",
+      "Pembina Pramuka": "bg-emerald-100 text-emerald-800",
     };
     return colors[jabatan] || "bg-gray-100 text-gray-800";
   };
@@ -328,24 +343,25 @@ export default function Administrasi() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="jabatan">Jabatan</Label>
-                      <select
-                        id="jabatan"
-                        value={formData.jabatan}
-                        onChange={(e) => setFormData({ ...formData, jabatan: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                      >
-                        <option value="">-- Pilih Jabatan --</option>
-                        <option value="Kepala Sekolah">Kepala Sekolah</option>
-                        <option value="Waka Kurikulum">Waka. Kurikulum</option>
-                        <option value="Waka Kesiswaan">Waka. Kesiswaan</option>
-                        <option value="Waka Hubungan Industri">Waka. Hubungan Industri</option>
-                        <option value="Waka Bimbingan Konseling">Waka. Bimbingan Konseling</option>
-                        <option value="Operator">Operator</option>
-                        <option value="Staff TU">Staff TU</option>
-                        <option value="Bendahara">Bendahara</option>
-                        <option value="Sekretaris">Sekretaris</option>
-                      </select>
+                      <div className="space-y-2 rounded-lg border p-3">
+                        {JABATAN_OPTIONS.map((option) => (
+                          <label key={option} className="flex items-center gap-3 cursor-pointer">
+                            <Checkbox
+                              checked={formData.jabatan.includes(option)}
+                              onCheckedChange={(checked: boolean | "indeterminate") => {
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  jabatan: checked
+                                    ? uniqueList([...prev.jabatan, option])
+                                    : prev.jabatan.filter((item) => item !== option),
+                                }));
+                              }}
+                            />
+                            <span className="text-sm">{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500">1 data administrasi bisa punya lebih dari 1 jabatan.</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="telepon">Telepon</Label>
@@ -464,9 +480,16 @@ export default function Administrasi() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getJabatanColor(admin.jabatan)}`}>
-                          {admin.jabatan}
-                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {parseJabatanList(admin.jabatan).map((jabatan) => (
+                            <span key={jabatan} className={`px-3 py-1 rounded-full text-xs font-medium ${getJabatanColor(jabatan)}`}>
+                              {jabatan}
+                            </span>
+                          ))}
+                          {parseJabatanList(admin.jabatan).length === 0 && (
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">-</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
@@ -535,9 +558,13 @@ export default function Administrasi() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold">{viewingAdmin.nama}</h3>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-1 ${getJabatanColor(viewingAdmin.jabatan)}`}>
-                    {viewingAdmin.jabatan}
-                  </span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {parseJabatanList(viewingAdmin.jabatan).map((jabatan) => (
+                      <span key={jabatan} className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getJabatanColor(jabatan)}`}>
+                        {jabatan}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -562,7 +589,7 @@ export default function Administrasi() {
                   <Briefcase className="w-5 h-5 text-gray-500" />
                   <div>
                     <p className="text-xs text-gray-500">Jabatan</p>
-                    <p className="font-medium">{viewingAdmin.jabatan}</p>
+                    <p className="font-medium">{formatJabatanDisplay(viewingAdmin.jabatan)}</p>
                   </div>
                 </div>
 
