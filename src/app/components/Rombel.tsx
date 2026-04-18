@@ -1496,15 +1496,14 @@ export default function Rombel() {
             </div>
 
             <div>
-              <Label>Nomor Kelas</Label>
+              <Label>Nomor Kelas (Opsional)</Label>
               <Input
                 type="text"
                 value={kelasForm.nomor_kelas}
                 onChange={(e) =>
                   setKelasForm((p) => ({ ...p, nomor_kelas: e.target.value }))
                 }
-                placeholder="Contoh: 1, 2, A, B"
-                required
+                placeholder="Contoh: 1, 2, A, B (biarkan kosong jika tidak ada)"
               />
             </div>
 
