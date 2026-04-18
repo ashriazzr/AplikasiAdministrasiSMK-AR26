@@ -99,6 +99,36 @@ const isMissingColumnsInSchemaCache = (error: unknown, columns: string[]): boole
   return normalized.includes("schema cache") && columns.some((column) => normalized.includes(`'${column.toLowerCase()}' column`));
 };
 
+const getPostgrestErrorMessage = (error: unknown): string => {
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String((error as { message?: unknown }).message || "");
+  }
+  return "";
+};
+
+const isPostgrestCode = (error: unknown, codes: string[]): boolean => {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  const code = String((error as { code?: unknown }).code || "").toUpperCase();
+  return codes.includes(code);
+};
+
+const isMissingTableOrRelation = (error: unknown, keywords: string[]): boolean => {
+  const message = getPostgrestErrorMessage(error).toLowerCase();
+  if (!message) return false;
+
+  const hasMissingHint =
+    message.includes("does not exist") ||
+    message.includes("not found") ||
+    message.includes("schema cache") ||
+    message.includes("could not find") ||
+    message.includes("relation") ||
+    message.includes("table");
+
+  return hasMissingHint && keywords.some((keyword) => message.includes(keyword.toLowerCase()));
+};
+
 const deriveLegacyTingkat = (namaKelas: string): string => {
   const token = namaKelas.trim().split(/\s+/)[0]?.toUpperCase() || "";
   if (token === "X" || token === "XI" || token === "XII") return token;
@@ -288,17 +318,112 @@ export const db = {
   async markTagihanAsPaid(tagihanIds: string[]) { const { error } = await supabase.from("tagihan").update({ status: "paid", updated_at: new Date().toISOString() }).in("id", tagihanIds); return { error }; },
 
   async getPembayaran() {
-    const { data, error } = await supabase.from("pembayaran").select("*, siswa:siswa_id (id, nama, nis, kelas_id, status_siswa), tagihan:tagihan_id (id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal))").order("tanggal_pembayaran", { ascending: false });
-    if (error) return { data: null, error };
-    const transformed = (data || []).map((p: any) => ({ ...p, jumlah_bayar: p.jumlah, tanggal_bayar: p.tanggal_pembayaran, keterangan: p.bukti_pembayaran ?? "", siswa_nama: p.siswa?.nama ?? "-", siswa_nis: p.siswa?.nis ?? "-", siswa_status: p.siswa?.status_siswa ?? "aktif", kelas_id: p.siswa?.kelas_id ?? null, kegiatan_id: p.tagihan?.kegiatan_id ?? null, nama_kegiatan: p.tagihan?.kegiatan?.nama_kegiatan ?? "Pembayaran", kegiatan: p.tagihan?.kegiatan ?? null }));
-    return { data: transformed, error };
+    const detailed = await supabase
+      .from("pembayaran")
+      .select("*, siswa:siswa_id (id, nama, nis, kelas_id, status_siswa), tagihan:tagihan_id (id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal))")
+      .order("tanggal_pembayaran", { ascending: false });
+
+    if (!detailed.error) {
+      const transformed = (detailed.data || []).map((p: any) => ({ ...p, jumlah_bayar: p.jumlah, tanggal_bayar: p.tanggal_pembayaran, keterangan: p.bukti_pembayaran ?? "", siswa_nama: p.siswa?.nama ?? "-", siswa_nis: p.siswa?.nis ?? "-", siswa_status: p.siswa?.status_siswa ?? "aktif", kelas_id: p.siswa?.kelas_id ?? null, kegiatan_id: p.tagihan?.kegiatan_id ?? null, nama_kegiatan: p.tagihan?.kegiatan?.nama_kegiatan ?? "Pembayaran", kegiatan: p.tagihan?.kegiatan ?? null }));
+      return { data: transformed, error: null };
+    }
+
+    const shouldFallback =
+      isMissingColumnsInSchemaCache(detailed.error, ["status_siswa"]) ||
+      isPostgrestCode(detailed.error, ["PGRST200", "PGRST201", "PGRST202", "PGRST204"]) ||
+      isMissingTableOrRelation(detailed.error, ["status_siswa", "pembayaran", "siswa", "tagihan", "kegiatan"]);
+
+    if (!shouldFallback) return { data: null, error: detailed.error };
+
+    const basic = await supabase.from("pembayaran").select("*").order("tanggal_pembayaran", { ascending: false });
+    if (basic.error) return { data: null, error: basic.error };
+
+    const pembayaranRows = basic.data || [];
+    const siswaIds = Array.from(new Set(pembayaranRows.map((p: any) => p.siswa_id).filter(Boolean)));
+    const tagihanIds = Array.from(new Set(pembayaranRows.map((p: any) => p.tagihan_id).filter(Boolean)));
+
+    const [siswaRes, tagihanRes] = await Promise.all([
+      siswaIds.length > 0
+        ? supabase.from("siswa").select("id, nama, nis, kelas_id, status_siswa").in("id", siswaIds)
+        : Promise.resolve({ data: [], error: null }),
+      tagihanIds.length > 0
+        ? supabase.from("tagihan").select("id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal)").in("id", tagihanIds)
+        : Promise.resolve({ data: [], error: null }),
+    ] as const);
+
+    const siswaMap = new Map(((siswaRes.data || []) as any[]).map((s) => [s.id, s]));
+    const tagihanMap = new Map(((tagihanRes.data || []) as any[]).map((t) => [t.id, t]));
+
+    const transformed = pembayaranRows.map((p: any) => {
+      const siswa = siswaMap.get(p.siswa_id) || null;
+      const tagihan = tagihanMap.get(p.tagihan_id) || null;
+      return {
+        ...p,
+        siswa,
+        tagihan,
+        jumlah_bayar: p.jumlah,
+        tanggal_bayar: p.tanggal_pembayaran,
+        keterangan: p.bukti_pembayaran ?? "",
+        siswa_nama: siswa?.nama ?? "-",
+        siswa_nis: siswa?.nis ?? "-",
+        siswa_status: siswa?.status_siswa ?? "aktif",
+        kelas_id: siswa?.kelas_id ?? null,
+        kegiatan_id: tagihan?.kegiatan_id ?? null,
+        nama_kegiatan: tagihan?.kegiatan?.nama_kegiatan ?? "Pembayaran",
+        kegiatan: tagihan?.kegiatan ?? null,
+      };
+    });
+
+    return { data: transformed, error: null };
   },
   async getPembayaranWithDetails() { const { data, error } = await supabase.from("pembayaran").select("*, siswa:siswa_id (id, nama, nis, kelas_id, kelas:kelas_id (id, nama_kelas)), tagihan:tagihan_id (id, jumlah, status, tanggal_jatuh_tempo, kegiatan_id)").order("tanggal_pembayaran", { ascending: false }); return { data: data as PembayaranWithDetails[] | null, error }; },
   async getPembayaranBySiswaId(siswaId: string) {
-    const { data, error } = await supabase.from("pembayaran").select("*, tagihan:tagihan_id (id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal))").eq("siswa_id", siswaId).order("tanggal_pembayaran", { ascending: false });
-    if (error) return { data: null, error };
-    const transformed = (data || []).map((p: any) => ({ ...p, jumlah_bayar: p.jumlah, tanggal_bayar: p.tanggal_pembayaran, keterangan: p.bukti_pembayaran ?? "", kegiatan_id: p.tagihan?.kegiatan_id ?? null, kegiatan: p.tagihan?.kegiatan ?? null, nama_kegiatan: p.tagihan?.kegiatan?.nama_kegiatan ?? "Kegiatan" }));
-    return { data: transformed, error };
+    const detailed = await supabase
+      .from("pembayaran")
+      .select("*, tagihan:tagihan_id (id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal))")
+      .eq("siswa_id", siswaId)
+      .order("tanggal_pembayaran", { ascending: false });
+
+    if (!detailed.error) {
+      const transformed = (detailed.data || []).map((p: any) => ({ ...p, jumlah_bayar: p.jumlah, tanggal_bayar: p.tanggal_pembayaran, keterangan: p.bukti_pembayaran ?? "", kegiatan_id: p.tagihan?.kegiatan_id ?? null, kegiatan: p.tagihan?.kegiatan ?? null, nama_kegiatan: p.tagihan?.kegiatan?.nama_kegiatan ?? "Kegiatan" }));
+      return { data: transformed, error: null };
+    }
+
+    const shouldFallback =
+      isPostgrestCode(detailed.error, ["PGRST200", "PGRST201", "PGRST202", "PGRST204"]) ||
+      isMissingTableOrRelation(detailed.error, ["tagihan", "kegiatan"]);
+
+    if (!shouldFallback) return { data: null, error: detailed.error };
+
+    const basic = await supabase
+      .from("pembayaran")
+      .select("*")
+      .eq("siswa_id", siswaId)
+      .order("tanggal_pembayaran", { ascending: false });
+
+    if (basic.error) return { data: null, error: basic.error };
+
+    const tagihanIds = Array.from(new Set((basic.data || []).map((p: any) => p.tagihan_id).filter(Boolean)));
+    const tagihanRes = tagihanIds.length > 0
+      ? await supabase.from("tagihan").select("id, kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal)").in("id", tagihanIds)
+      : { data: [], error: null };
+
+    const tagihanMap = new Map(((tagihanRes.data || []) as any[]).map((t) => [t.id, t]));
+    const transformed = (basic.data || []).map((p: any) => {
+      const tagihan = tagihanMap.get(p.tagihan_id) || null;
+      return {
+        ...p,
+        tagihan,
+        jumlah_bayar: p.jumlah,
+        tanggal_bayar: p.tanggal_pembayaran,
+        keterangan: p.bukti_pembayaran ?? "",
+        kegiatan_id: tagihan?.kegiatan_id ?? null,
+        kegiatan: tagihan?.kegiatan ?? null,
+        nama_kegiatan: tagihan?.kegiatan?.nama_kegiatan ?? "Kegiatan",
+      };
+    });
+
+    return { data: transformed, error: null };
   },
   async createPembayaran(pembayaran: Omit<Pembayaran, "id" | "created_at" | "updated_at">) { return supabase.from("pembayaran").insert([pembayaran]).select().single(); },
   async updatePembayaran(id: string, pembayaran: Partial<Pembayaran>) { return supabase.from("pembayaran").update(pembayaran).eq("id", id).select().single(); },
@@ -392,13 +517,51 @@ export const db = {
   async removeKelasFromKegiatan(kegiatanId: string, kelasId: string) { const { error } = await supabase.from("kegiatan_kelas").delete().eq("kegiatan_id", kegiatanId).eq("kelas_id", kelasId); return { error }; },
 
   async getBeasiswaAdministrasi() {
-    const { data, error } = await supabase
+    const detailed = await supabase
       .from("beasiswa_administrasi")
       .select("*, beasiswa_administrasi_siswa (siswa_id, siswa:siswa_id (id, nama, nis, kelas_id, kelas:kelas_id (id, nama_kelas, jurusan, tahun_ajaran))), beasiswa_administrasi_kegiatan (kegiatan_id, kegiatan:kegiatan_id (id, nama_kegiatan, nominal, deskripsi, tanggal_mulai, tanggal_selesai, status, created_at, updated_at))")
       .order("created_at", { ascending: false });
-    if (error) return { data: null, error };
 
-    const transformed: BeasiswaAdministrasiWithRelations[] = (data || []).map((item: any) => ({
+    if (detailed.error) {
+      const missingTable =
+        isPostgrestCode(detailed.error, ["PGRST205"]) ||
+        isMissingTableOrRelation(detailed.error, ["beasiswa_administrasi"]);
+
+      if (missingTable) {
+        return { data: [] as BeasiswaAdministrasiWithRelations[], error: null };
+      }
+
+      const relationIssue =
+        isPostgrestCode(detailed.error, ["PGRST200", "PGRST201", "PGRST202", "PGRST204"]) ||
+        isMissingTableOrRelation(detailed.error, ["beasiswa_administrasi_siswa", "beasiswa_administrasi_kegiatan", "siswa", "kegiatan"]);
+
+      if (!relationIssue) return { data: null, error: detailed.error };
+
+      const basic = await supabase
+        .from("beasiswa_administrasi")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (basic.error) {
+        const stillMissing =
+          isPostgrestCode(basic.error, ["PGRST205"]) ||
+          isMissingTableOrRelation(basic.error, ["beasiswa_administrasi"]);
+        if (stillMissing) return { data: [] as BeasiswaAdministrasiWithRelations[], error: null };
+        return { data: null, error: basic.error };
+      }
+
+      const fallback: BeasiswaAdministrasiWithRelations[] = (basic.data || []).map((item: any) => ({
+        ...item,
+        siswa_ids: [],
+        kegiatan_ids: [],
+        siswa_list: [],
+        kegiatan_list: [],
+      }));
+
+      return { data: fallback, error: null };
+    }
+
+    const transformed: BeasiswaAdministrasiWithRelations[] = (detailed.data || []).map((item: any) => ({
       ...item,
       siswa_ids: item.beasiswa_administrasi_siswa?.map((rel: any) => rel.siswa_id) ?? [],
       kegiatan_ids: item.beasiswa_administrasi_kegiatan?.map((rel: any) => rel.kegiatan_id) ?? [],
@@ -406,7 +569,7 @@ export const db = {
       kegiatan_list: item.beasiswa_administrasi_kegiatan?.map((rel: any) => rel.kegiatan).filter(Boolean) ?? [],
     }));
 
-    return { data: transformed, error };
+    return { data: transformed, error: null };
   },
 
   async getBeasiswaAdministrasiById(id: string) {
