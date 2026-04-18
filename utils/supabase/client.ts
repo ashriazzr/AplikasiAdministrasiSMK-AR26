@@ -36,9 +36,32 @@ const createSupabaseNoopQuery = () => {
   return query;
 };
 
+const createSupabaseNoopChannel = () => {
+  const channelState: any = {};
+
+  const channel = new Proxy(channelState, {
+    get(_target, property) {
+      if (property === "subscribe") {
+        return (..._args: unknown[]) => channel;
+      }
+
+      if (property === "unsubscribe") {
+        return (..._args: unknown[]) => Promise.resolve("ok");
+      }
+
+      return (..._args: unknown[]) => channel;
+    },
+  });
+
+  return channel;
+};
+
 const createSupabaseNoopClient = () => ({
   from: () => createSupabaseNoopQuery(),
   rpc: () => Promise.resolve(createSupabaseErrorResult()),
+  channel: () => createSupabaseNoopChannel(),
+  removeChannel: () => Promise.resolve("ok"),
+  removeAllChannels: () => Promise.resolve([]),
 });
 
 if (supabaseUrl && supabaseAnonKey && !/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(supabaseUrl)) {
