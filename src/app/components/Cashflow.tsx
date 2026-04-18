@@ -24,7 +24,7 @@ interface ActivitySummary { totalPemasukan: number; totalPengeluaran: number; sa
 const rp = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 const fmtDate = (s: string) => { if (!s) return "-"; const d = new Date(s); return isNaN(d.getTime()) ? s : d.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }); };
 const COLOR_PRESETS = ["#10b981","#06b6d4","#ef4444","#f97316","#8b5cf6","#eab308","#6366f1","#14b8a6","#64748b","#ec4899"];
-const MANUAL_TX_PAGE_SIZE = 20;
+const MANUAL_TX_PAGE_SIZE = 10;
 
 export default function Cashflow() {
   const [searchParams] = useSearchParams();
