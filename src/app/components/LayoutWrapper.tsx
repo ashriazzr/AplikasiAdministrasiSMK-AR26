@@ -12,15 +12,15 @@ interface LayoutWrapperProps {
  */
 export function LayoutWrapper({ children, title, subtitle }: LayoutWrapperProps) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <main className="px-6 py-6 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <main className="mx-auto max-w-7xl px-4 py-5 md:px-6 md:py-6">
         {(title || subtitle) && (
-          <div className="mb-8">
-            {title && <h1 className="text-3xl font-bold text-gray-900">{title}</h1>}
-            {subtitle && <p className="text-sm text-gray-500 mt-2">{subtitle}</p>}
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+            {title && <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>}
+            {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
           </div>
         )}
-        <div className="space-y-6">{children}</div>
+        <div className="space-y-5">{children}</div>
       </main>
     </div>
   );

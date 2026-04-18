@@ -233,8 +233,8 @@ export default function Kelas() {
                   Tambah Kelas
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+              <DialogContent className="w-[95vw] max-w-2xl max-h-[92vh] overflow-hidden p-0">
+                <DialogHeader className="px-6 pt-6">
                   <DialogTitle>
                     {editingKelas ? "Edit Data Kelas" : "Tambah Data Kelas"}
                   </DialogTitle>
@@ -242,8 +242,8 @@ export default function Kelas() {
                     {editingKelas ? "Perbarui informasi kelas dan siswa" : "Masukkan informasi kelas baru dan pilih siswa"}
                   </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit}>
-                  <div className="space-y-4 py-4">
+                <form onSubmit={handleSubmit} className="flex max-h-[92vh] flex-col min-h-0">
+                  <div className="space-y-4 px-6 py-4 overflow-y-auto min-h-0">
                     {/* Kelas Info */}
                     <div className="space-y-2">
                       <Label htmlFor="nama_kelas">Nama Kelas</Label>
@@ -314,7 +314,7 @@ export default function Kelas() {
                       )}
                     </div>
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
                     <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                       {editingKelas ? "Perbarui" : "Simpan"}
                     </Button>

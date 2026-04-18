@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Users, GraduationCap, School, TrendingUp, DollarSign, AlertCircle, CheckCircle } from "lucide-react";
 import { db, isSupabaseConfigured, isSupabaseConfigError, supabaseConfigErrorMessage } from "../../../utils/supabase/client";
 import { toast } from "sonner";
+import { LayoutWrapper } from "./LayoutWrapper";
 
 interface Stats {
   totalAdministrasi: number;
@@ -316,11 +317,7 @@ export default function Dashboard() {
 
 
   return (
-    <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Laporan dan Statistik Administrasi Sekolah</p>
-      </div>
+    <LayoutWrapper title="Dashboard" subtitle="Laporan dan Statistik Administrasi Sekolah">
 
       {configWarning && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
@@ -557,6 +554,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </LayoutWrapper>
   );
 }

@@ -656,16 +656,17 @@ export default function RFIDScanner() {
 
       {/* Register Card Dialog */}
       <Dialog open={registerCardDialogOpen} onOpenChange={setRegisterCardDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md max-h-[92vh] overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Daftarkan Kartu RFID</DialogTitle>
             <DialogDescription>
               Kartu <strong>{unregisteredCardId}</strong> belum terdaftar ke siswa manapun. Pilih siswa untuk ditugaskan ke kartu ini.
             </DialogDescription>
           </DialogHeader>
 
-          {allSiswa.length === 0 ? (
-            <div className="space-y-4 py-4">
+            <div className="flex flex-col max-h-[92vh] min-h-0">
+            {allSiswa.length === 0 ? (
+              <div className="space-y-4 px-6 py-4">
               <div className="flex items-start gap-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                 <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div>
@@ -673,13 +674,16 @@ export default function RFIDScanner() {
                   <p className="text-xs text-yellow-700 mt-1">Jika ingin mengganti RFID siswa, silakan gunakan menu Edit di Siswa Management.</p>
                 </div>
               </div>
-              <Button onClick={() => setRegisterCardDialogOpen(false)} variant="outline" className="w-full">
-                Tutup
-              </Button>
+                <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
+                  <Button onClick={() => setRegisterCardDialogOpen(false)} variant="outline" className="w-full">
+                    Tutup
+                  </Button>
+                </DialogFooter>
             </div>
           ) : (
-            <form onSubmit={handleRegisterCard} className="space-y-4">
-              <div>
+              <form onSubmit={handleRegisterCard} className="flex flex-col min-h-0">
+                <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+                <div>
                 <Label>Pilih Siswa*</Label>
                 <select
                   value={selectedSiswaForCard}
@@ -696,8 +700,9 @@ export default function RFIDScanner() {
                 </select>
                 <p className="text-xs text-gray-500 mt-1">{allSiswa.length} siswa tersedia tanpa RFID</p>
               </div>
+              </div>
 
-              <DialogFooter>
+              <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
                 <Button
                   type="button"
                   variant="outline"
@@ -716,15 +721,16 @@ export default function RFIDScanner() {
 
       {/* Payment Dialog */}
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md max-h-[92vh] overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Proses Pembayaran</DialogTitle>
             <DialogDescription>
               {siswaData?.nama} - {selectedKegiatan?.nama_kegiatan}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handlePaymentSubmit} className="space-y-4">
+          <form onSubmit={handlePaymentSubmit} className="flex max-h-[92vh] flex-col min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
             <div>
               <Label>Tanggal Pembayaran</Label>
               <Input
@@ -760,8 +766,9 @@ export default function RFIDScanner() {
                 placeholder="Catatan pembayaran"
               />
             </div>
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
               <Button
                 type="button"
                 variant="outline"
@@ -777,15 +784,16 @@ export default function RFIDScanner() {
 
       {/* Edit Transaction Dialog */}
       <Dialog open={editTransactionDialogOpen} onOpenChange={setEditTransactionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md max-h-[92vh] overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Edit Transaksi Pembayaran</DialogTitle>
             <DialogDescription>
               {siswaData?.nama} - {selectedTransaction?.nama_kegiatan}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleUpdateTransaction} className="space-y-4">
+          <form onSubmit={handleUpdateTransaction} className="flex max-h-[92vh] flex-col min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
             <div>
               <Label>Tanggal Pembayaran</Label>
               <Input
@@ -816,8 +824,9 @@ export default function RFIDScanner() {
                 placeholder="Catatan pembayaran"
               />
             </div>
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
               <Button
                 type="button"
                 variant="outline"

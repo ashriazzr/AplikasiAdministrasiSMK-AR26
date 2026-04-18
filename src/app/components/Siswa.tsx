@@ -430,8 +430,8 @@ export default function Siswa() {
                         Tambah Siswa
                       </Button>
                     </DialogTrigger>
-                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
+                  <DialogContent className="w-[95vw] max-w-2xl max-h-[92vh] overflow-hidden p-0">
+                    <DialogHeader className="px-6 pt-6">
                       <DialogTitle>
                         {editingSiswa ? "Edit Data Siswa" : "Tambah Data Siswa"}
                       </DialogTitle>
@@ -439,8 +439,8 @@ export default function Siswa() {
                         {editingSiswa ? "Perbarui informasi siswa" : "Masukkan data siswa baru"}
                       </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleSubmit}>
-                      <div className="space-y-4 py-4">
+                    <form onSubmit={handleSubmit} className="flex max-h-[92vh] flex-col min-h-0">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-6 py-4 overflow-y-auto min-h-0">
                         <div className="space-y-2">
                           <Label htmlFor="nama">Nama Lengkap</Label>
                           <Input
@@ -531,7 +531,7 @@ export default function Siswa() {
                             required
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2 md:col-span-2">
                           <Label htmlFor="rfid_card">UID RFID</Label>
                           <Input
                             id="rfid_card"
@@ -541,7 +541,7 @@ export default function Siswa() {
                           />
                         </div>
                       </div>
-                      <DialogFooter>
+                      <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
                         <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                           {editingSiswa ? "Perbarui" : "Simpan"}
                         </Button>
@@ -751,15 +751,16 @@ export default function Siswa() {
           setNewRFIDValue("");
         }
       }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="w-[95vw] max-w-md max-h-[92vh] overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>Edit Kartu RFID</DialogTitle>
             <DialogDescription>
               Ubah atau hapus nomor RFID untuk {editingRFIDSiswa?.nama}
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleRFIDUpdate} className="space-y-4">
+          <form onSubmit={handleRFIDUpdate} className="flex max-h-[92vh] flex-col min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
             <div>
               <Label className="text-xs text-gray-500 block mb-2">Siswa</Label>
               <div className="px-3 py-2 bg-gray-50 rounded-lg border">
@@ -781,8 +782,9 @@ export default function Siswa() {
                 {newRFIDValue ? `RFID saat ini: ${newRFIDValue}` : "Kosong - tidak memiliki RFID"}
               </p>
             </div>
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="px-6 py-4 border-t bg-white mt-auto">
               <Button
                 type="button"
                 variant="outline"

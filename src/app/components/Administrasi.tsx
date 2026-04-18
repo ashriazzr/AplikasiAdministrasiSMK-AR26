@@ -310,7 +310,7 @@ export default function Administrasi() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="w-[95vw] max-w-2xl max-h-[92vh] overflow-hidden p-0">
-                <DialogHeader>
+                <DialogHeader className="px-6 pt-6">
                   <DialogTitle>
                     {editingAdmin ? "Edit Data Administrasi" : "Tambah Data Administrasi"}
                   </DialogTitle>
@@ -319,7 +319,7 @@ export default function Administrasi() {
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="flex flex-col max-h-[92vh]">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-6 py-4 overflow-y-auto">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-6 py-4 overflow-y-auto min-h-0">
                     <div className="space-y-1.5">
                       <Label htmlFor="nama">Nama Lengkap</Label>
                       <Input
