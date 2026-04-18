@@ -32,6 +32,19 @@ interface Beasiswa extends BeasiswaType {
   kegiatan_list?: KegiatanType[];
 }
 
+const JURUSAN_OPTIONS = [
+  "Teknik Komputer dan Jaringan",
+  "Teknik Kendaraan Ringan",
+];
+
+const parseJurusanList = (value?: string | null) =>
+  (value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const serializeJurusanList = (items: string[]) => items.join(", ");
+
 export default function Rombel() {
   const [siswaList, setSiswaList] = useState<Siswa[]>([]);
   const [kelasList, setKelasList] = useState<Kelas[]>([]);
@@ -72,7 +85,7 @@ export default function Rombel() {
 
   const [kelasForm, setKelasForm] = useState({
     nama_kelas: "",
-    jurusan: "",
+    jurusan: [] as string[],
     tahun_ajaran: "",
     wali_kelas: "",
   });
@@ -337,9 +350,14 @@ export default function Rombel() {
   const handleKelasSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (kelasForm.jurusan.length === 0) {
+      toast.error("Pilih minimal 1 jurusan");
+      return;
+    }
+
     const payload = {
       nama_kelas: kelasForm.nama_kelas.trim(),
-      jurusan: kelasForm.jurusan.trim(),
+      jurusan: serializeJurusanList(kelasForm.jurusan),
       tahun_ajaran: kelasForm.tahun_ajaran.trim(),
       wali_kelas: kelasForm.wali_kelas,
     };
@@ -387,7 +405,7 @@ export default function Rombel() {
       setEditingKelas(kelas);
       setKelasForm({
         nama_kelas: kelas.nama_kelas || "",
-        jurusan: kelas.jurusan || "",
+        jurusan: parseJurusanList(kelas.jurusan),
         tahun_ajaran: kelas.tahun_ajaran || "",
         wali_kelas: kelas.wali_kelas || "",
       });
@@ -401,7 +419,7 @@ export default function Rombel() {
     setEditingKelas(null);
     setKelasForm({
       nama_kelas: "",
-      jurusan: "",
+      jurusan: [],
       tahun_ajaran: "",
       wali_kelas: "",
     });
@@ -1474,15 +1492,24 @@ export default function Rombel() {
 
             <div>
               <Label>Jurusan</Label>
-              <Input
-                type="text"
-                value={kelasForm.jurusan}
-                onChange={(e) =>
-                  setKelasForm((p) => ({ ...p, jurusan: e.target.value }))
-                }
-                placeholder="Contoh: TKJ"
-                required
-              />
+              <div className="space-y-2 rounded-lg border p-3 mt-2">
+                {JURUSAN_OPTIONS.map((option) => (
+                  <label key={option} className="flex items-center gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={kelasForm.jurusan.includes(option)}
+                      onCheckedChange={(checked: boolean | "indeterminate") => {
+                        setKelasForm((prev) => ({
+                          ...prev,
+                          jurusan: checked
+                            ? [...prev.jurusan, option]
+                            : prev.jurusan.filter((item) => item !== option),
+                        }));
+                      }}
+                    />
+                    <span className="text-sm">{option}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div>
