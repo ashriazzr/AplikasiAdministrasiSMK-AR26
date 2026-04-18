@@ -716,6 +716,7 @@ export default function RFIDScanner() {
               </DialogFooter>
             </form>
           )}
+          </div>
         </DialogContent>
       </Dialog>
 
