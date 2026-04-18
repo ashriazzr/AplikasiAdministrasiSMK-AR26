@@ -21,9 +21,7 @@ interface Siswa extends SiswaType {
 
 interface Kelas extends KelasType {
   siswaCount?: number;
-  kelas?: string;
   jurusan?: string;
-  nomor_kelas?: string;
   tahun_ajaran?: string;
 }
 
@@ -73,12 +71,10 @@ export default function Rombel() {
   });
 
   const [kelasForm, setKelasForm] = useState({
-    kelas: "",
+    nama_kelas: "",
     jurusan: "",
-    nomor_kelas: "",
     tahun_ajaran: "",
     wali_kelas: "",
-    tingkat: "",
   });
 
   const [beasiswaForm, setBeasiswaForm] = useState({
@@ -189,20 +185,16 @@ export default function Rombel() {
       const kelasByName = new Map<string, string>();
 
       // Build flexible class-key index so import accepts variants like:
-      // "X TKJ 1", "X-TKJ-1", "x tkj1", or exact nama_kelas.
+      // "X TKJ 1", "X-TKJ-1", "xtkj1", or exact nama_kelas.
       for (const kelas of kelasList) {
-        const tingkat = (kelas.kelas || kelas.tingkat || "").trim();
-        const jurusan = (kelas.jurusan || "").trim();
-        const nomor = (kelas.nomor_kelas || "").trim();
         const namaKelas = (kelas.nama_kelas || "").trim();
+        const jurusan = (kelas.jurusan || "").trim();
 
         const candidates = [
           namaKelas,
-          `${tingkat} ${jurusan}`.trim(),
-          `${tingkat} ${jurusan} ${nomor}`.trim(),
-          `${tingkat}-${jurusan}`.trim(),
-          `${tingkat}-${jurusan}-${nomor}`.trim(),
-          `${tingkat}${jurusan}${nomor}`.trim(),
+          `${namaKelas} ${jurusan}`.trim(),
+          `${namaKelas}-${jurusan}`.trim(),
+          `${namaKelas}${jurusan}`.trim(),
         ].filter(Boolean);
 
         for (const candidate of candidates) {
@@ -245,13 +237,9 @@ export default function Rombel() {
             const normalizedKelasInput = normalizeKelasValue(kelasInput);
             kelasId = kelasByName.get(normalizedKelasInput) || "";
 
-            // Backward compatibility: if DB still stores classes without nomor_kelas,
-            // allow matching base form by removing trailing class number (e.g. X TKJ 1 -> X TKJ).
             if (!kelasId) {
-              const baseKelasInput = normalizedKelasInput.replace(/[0-9]+$/, "");
-              if (baseKelasInput) {
-                kelasId = kelasByName.get(baseKelasInput) || "";
-              }
+              const normalizedNoSpace = normalizedKelasInput.replace(/kelas/g, "");
+              kelasId = kelasByName.get(normalizedNoSpace) || "";
             }
           }
         }
@@ -350,9 +338,10 @@ export default function Rombel() {
     e.preventDefault();
 
     const payload = {
-      ...kelasForm,
-      nama_kelas: `${kelasForm.kelas || kelasForm.tingkat} ${kelasForm.jurusan} ${kelasForm.nomor_kelas}`.trim(),
-      tingkat: kelasForm.tingkat || kelasForm.kelas,
+      nama_kelas: kelasForm.nama_kelas.trim(),
+      jurusan: kelasForm.jurusan.trim(),
+      tahun_ajaran: kelasForm.tahun_ajaran.trim(),
+      wali_kelas: kelasForm.wali_kelas,
     };
 
     try {
@@ -397,12 +386,10 @@ export default function Rombel() {
     if (kelas) {
       setEditingKelas(kelas);
       setKelasForm({
-        kelas: kelas.kelas || kelas.tingkat || "",
+        nama_kelas: kelas.nama_kelas || "",
         jurusan: kelas.jurusan || "",
-        nomor_kelas: kelas.nomor_kelas || "",
         tahun_ajaran: kelas.tahun_ajaran || "",
-        wali_kelas: kelas.wali_kelas,
-        tingkat: kelas.tingkat || kelas.kelas || "",
+        wali_kelas: kelas.wali_kelas || "",
       });
     } else {
       resetKelasForm();
@@ -413,12 +400,10 @@ export default function Rombel() {
   const resetKelasForm = () => {
     setEditingKelas(null);
     setKelasForm({
-      kelas: "",
+      nama_kelas: "",
       jurusan: "",
-      nomor_kelas: "",
       tahun_ajaran: "",
       wali_kelas: "",
-      tingkat: "",
     });
   };
 
@@ -469,11 +454,10 @@ export default function Rombel() {
     if (!normalizedSearch) return true;
 
     const matchKelas =
-      normalize(k.kelas).includes(normalizedSearch) ||
+      normalize(k.nama_kelas).includes(normalizedSearch) ||
       normalize(k.jurusan).includes(normalizedSearch) ||
       normalize(k.tahun_ajaran).includes(normalizedSearch) ||
-      normalize(k.wali_kelas).includes(normalizedSearch) ||
-      normalize(k.tingkat).includes(normalizedSearch);
+      normalize(k.wali_kelas).includes(normalizedSearch);
 
     if (matchKelas) return true;
 
@@ -681,7 +665,7 @@ export default function Rombel() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="font-semibold text-sm text-gray-800 truncate">
-                                    {`${kelas.kelas || kelas.tingkat} ${kelas.jurusan || ""}`.trim()}
+                                    {kelas.nama_kelas || "-"}
                                   </p>
                                   <p className="text-xs text-gray-500 mt-1">Tahun {kelas.tahun_ajaran || "-"}</p>
                                 </div>
@@ -763,7 +747,7 @@ export default function Rombel() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <CardTitle className="text-xl leading-tight">
-                            {`${selectedKelas.kelas || selectedKelas.tingkat} ${selectedKelas.jurusan || ""}`.trim()}
+                            {selectedKelas.nama_kelas || "-"}
                           </CardTitle>
                           <p className="text-xs text-gray-500 mt-1">Detail kelas, data siswa, dan aksi CRUD</p>
                         </div>
@@ -801,7 +785,7 @@ export default function Rombel() {
                         <div className="xl:col-span-2 grid grid-cols-2 gap-2 self-start">
                           <div className="rounded-lg border bg-gray-50 p-3">
                             <p className="text-xs text-gray-500">Kelas</p>
-                            <p className="text-xl font-semibold mt-1">{selectedKelas.kelas || selectedKelas.tingkat || "-"}</p>
+                            <p className="text-xl font-semibold mt-1">{selectedKelas.nama_kelas || "-"}</p>
                           </div>
                           <div className="rounded-lg border bg-gray-50 p-3">
                             <p className="text-xs text-gray-500">Jurusan</p>
@@ -923,8 +907,7 @@ export default function Rombel() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-2 px-3">No</th>
-                      <th className="text-left py-2 px-3">Kelas</th>
-                      <th className="text-left py-2 px-3">Jurusan</th>
+                      <th className="text-left py-2 px-3">Nama Kelas</th>
                       <th className="text-left py-2 px-3">Jurusan</th>
                       <th className="text-left py-2 px-3">Tahun Ajaran</th>
                       <th className="text-left py-2 px-3">Wali Kelas</th>
@@ -936,7 +919,7 @@ export default function Rombel() {
                     {filteredKelas.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={7}
                           className="text-center py-8 text-gray-500"
                         >
                           Belum ada kelas
@@ -951,12 +934,7 @@ export default function Rombel() {
                           <td className="py-2 px-3">{i + 1}</td>
                           <td className="py-2 px-3">
                             <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-semibold">
-                              {`${kelas.kelas || kelas.tingkat} ${kelas.jurusan || ""}`.trim()}
-                            </span>
-                          </td>
-                          <td className="py-2 px-3">
-                            <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-semibold">
-                              {kelas.jurusan}
+                              {kelas.nama_kelas || "-"}
                             </span>
                           </td>
                           <td className="py-2 px-3">
@@ -1210,7 +1188,7 @@ export default function Rombel() {
                             <td className="py-2 px-3">
                               {kelas ? (
                                 <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-semibold">
-                                  {`${kelas.kelas} ${kelas.jurusan}`.trim()}
+                                  {kelas.nama_kelas || "-"}
                                 </span>
                               ) : (
                                 <span className="text-gray-400 text-xs">
@@ -1316,7 +1294,7 @@ export default function Rombel() {
                 <option value="">Pilih Kelas</option>
                 {kelasList.map((k) => (
                   <option key={k.id} value={k.id}>
-                    {`${k.kelas || k.tingkat} ${k.jurusan || ''}`.trim()}
+                    {k.nama_kelas || "-"}
                   </option>
                 ))}
               </select>
@@ -1477,52 +1455,33 @@ export default function Rombel() {
               {editingKelas ? "Edit Data Kelas" : "Tambah Kelas"}
             </DialogTitle>
             <DialogDescription>
-              Lengkapi data kelas; nama kelas otomatis dibuat dari Kelas + Jurusan.
+              Lengkapi data kelas: nama kelas, jurusan, wali kelas, dan tahun ajaran.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleKelasSubmit} className="space-y-4">
             <div>
-              <Label>Kelas</Label>
-              <select
-                value={kelasForm.kelas}
+              <Label>Nama Kelas</Label>
+              <Input
+                type="text"
+                value={kelasForm.nama_kelas}
                 onChange={(e) =>
-                  setKelasForm((p) => ({ ...p, kelas: e.target.value }))
+                  setKelasForm((p) => ({ ...p, nama_kelas: e.target.value }))
                 }
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                placeholder="Contoh: X TKJ 1"
                 required
-              >
-                <option value="">Pilih Kelas</option>
-                <option value="X">X</option>
-                <option value="XI">XI</option>
-                <option value="XII">XII</option>
-              </select>
+              />
             </div>
 
             <div>
               <Label>Jurusan</Label>
-              <select
+              <Input
+                type="text"
                 value={kelasForm.jurusan}
                 onChange={(e) =>
                   setKelasForm((p) => ({ ...p, jurusan: e.target.value }))
                 }
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                placeholder="Contoh: TKJ"
                 required
-              >
-                <option value="">Pilih Jurusan</option>
-                <option value="TKJ">TKJ (Teknik Komputer Jaringan)</option>
-                <option value="TKR">TKR (Teknik Kendaraan Ringan)</option>
-              </select>
-            </div>
-
-            <div>
-              <Label>Nomor Kelas (Opsional)</Label>
-              <Input
-                type="text"
-                value={kelasForm.nomor_kelas}
-                onChange={(e) =>
-                  setKelasForm((p) => ({ ...p, nomor_kelas: e.target.value }))
-                }
-                placeholder="Contoh: 1, 2, A, B (biarkan kosong jika tidak ada)"
               />
             </div>
 
