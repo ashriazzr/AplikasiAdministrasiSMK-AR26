@@ -18,6 +18,16 @@ interface Kelas       { id: string; nama_kelas: string }
 interface Siswa       { id: string; nama: string; nis: string; kelas_id: string }
 interface Tagihan     { id: string; kegiatan_id: string; nama_kegiatan: string; nominal: number; batas_pembayaran: string; total_dibayar: number; sisa_bayar: number; status: string }
 interface Pembayaran  { id: string; tagihan_id: string; kegiatan_id: string; siswa_id: string; jumlah: number; tanggal_pembayaran: string; bukti_pembayaran?: string; metode_pembayaran?: string; dicatat_oleh?: string; siswa?: { id: string; nama: string; nis: string; kelas_id: string }; kegiatan?: { id: string; nama_kegiatan: string; nominal: number } }
+interface SiswaTagihanSummary {
+  siswa_id: string;
+  nama: string;
+  nis: string;
+  jumlah_tagihan: number;
+  jumlah_lunas: number;
+  total_tagihan: number;
+  total_terbayar: number;
+  total_sisa: number;
+}
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 const PAGE_SIZE = 20;
@@ -95,11 +105,13 @@ export default function Tagihan() {
   const [selectedSiswa,   setSelectedSiswa]   = useState("");
   const [selectedKegiatan, setSelectedKegiatan] = useState("");
   const [searchSiswa,     setSearchSiswa]     = useState("");
+  const [siswaSummary,    setSiswaSummary]    = useState<SiswaTagihanSummary[]>([]);
+  const [summaryLoading,  setSummaryLoading]  = useState(false);
 
   const [jumlahBayar,      setJumlahBayar]      = useState("");
   const [keterangan,       setKeterangan]       = useState("");
   const [tanggalBayar,     setTanggalBayar]     = useState(new Date().toISOString().split("T")[0]);
-  const [metodePembayaran, setMetodePembayaran] = useState("transfer");
+  const [metodePembayaran, setMetodePembayaran] = useState("tunai");
 
   /* pagination */
   const tagihanPag    = usePaginate(tagihanList);
@@ -109,8 +121,17 @@ export default function Tagihan() {
   useEffect(() => { fetchKelas(); }, []);
 
   useEffect(() => {
-    if (selectedKelas) { fetchSiswaByKelas(selectedKelas); setSelectedSiswa(""); }
-    else { setSiswaList([]); setTagihanList([]); setPembayaranList([]); }
+    if (selectedKelas) {
+      fetchSiswaByKelas(selectedKelas);
+      fetchSiswaSummaryByKelas(selectedKelas);
+      setSelectedSiswa("");
+      setSearchSiswa("");
+    } else {
+      setSiswaList([]);
+      setSiswaSummary([]);
+      setTagihanList([]);
+      setPembayaranList([]);
+    }
   }, [selectedKelas]);
 
   useEffect(() => {
@@ -136,6 +157,51 @@ export default function Tagihan() {
     setSiswaList((data || []).filter((s: any) => s.kelas_id === kelasId));
   };
 
+  const fetchSiswaSummaryByKelas = async (kelasId: string) => {
+    setSummaryLoading(true);
+    try {
+      const [siswaRes, tagihanRes, pembayaranRes] = await Promise.all([
+        db.getSiswaWithKelas(),
+        db.getTagihan(),
+        db.getPembayaran(),
+      ]);
+
+      const siswaKelas = ((siswaRes.data || []) as any[]).filter((s) => s.kelas_id === kelasId);
+      const semuaTagihan = (tagihanRes.data || []) as any[];
+      const semuaPembayaran = (pembayaranRes.data || []) as any[];
+
+      const bayarByTagihan = new Map<string, number>();
+      for (const p of semuaPembayaran) {
+        const key = p.tagihan_id;
+        if (!key) continue;
+        const current = bayarByTagihan.get(key) || 0;
+        bayarByTagihan.set(key, current + Number(p.jumlah || p.jumlah_bayar || 0));
+      }
+
+      const summaryRows: SiswaTagihanSummary[] = siswaKelas.map((siswa) => {
+        const tagihanSiswa = semuaTagihan.filter((t) => t.siswa_id === siswa.id);
+        const totalTagihan = tagihanSiswa.reduce((sum, t) => sum + Number(t.jumlah || 0), 0);
+        const totalTerbayar = tagihanSiswa.reduce((sum, t) => sum + (bayarByTagihan.get(t.id) || 0), 0);
+        const jumlahLunas = tagihanSiswa.filter((t) => (bayarByTagihan.get(t.id) || 0) >= Number(t.jumlah || 0)).length;
+
+        return {
+          siswa_id: siswa.id,
+          nama: siswa.nama,
+          nis: siswa.nis,
+          jumlah_tagihan: tagihanSiswa.length,
+          jumlah_lunas: jumlahLunas,
+          total_tagihan: totalTagihan,
+          total_terbayar: totalTerbayar,
+          total_sisa: Math.max(0, totalTagihan - totalTerbayar),
+        };
+      });
+
+      setSiswaSummary(summaryRows);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   const fetchTagihan = async (siswaId: string) => {
     const { data, error } = await db.getTagihanBySiswaId(siswaId);
     if (error) { console.error("Error tagihan:", error); return; }
@@ -155,13 +221,13 @@ export default function Tagihan() {
       setJumlahBayar(String(pembayaran.jumlah ?? ""));
       setKeterangan(pembayaran.bukti_pembayaran ?? "");
       setTanggalBayar(pembayaran.tanggal_pembayaran ? pembayaran.tanggal_pembayaran.split("T")[0] : new Date().toISOString().split("T")[0]);
-      setMetodePembayaran(pembayaran.metode_pembayaran ?? "transfer");
+      setMetodePembayaran(pembayaran.metode_pembayaran ?? "tunai");
     } else {
       setEditingPembayaran(null);
       setJumlahBayar(sisaBayar > 0 ? String(sisaBayar) : "");
       setKeterangan("");
       setTanggalBayar(new Date().toISOString().split("T")[0]);
-      setMetodePembayaran("transfer");
+      setMetodePembayaran("tunai");
     }
     setSelectedKegiatan(kegiatanId);
     setDialogOpen(true);
@@ -196,6 +262,7 @@ export default function Tagihan() {
       setJumlahBayar("");
       setKeterangan("");
       await Promise.all([fetchTagihan(selectedSiswa), fetchPembayaran(selectedSiswa)]);
+      if (selectedKelas) await fetchSiswaSummaryByKelas(selectedKelas);
       toast.success(editingPembayaran ? "✅ Pembayaran diperbarui" : "✅ Pembayaran dicatat");
     } catch (error) {
       toast.error(`❌ ${error instanceof Error ? error.message : "Terjadi kesalahan"}`);
@@ -209,6 +276,7 @@ export default function Tagihan() {
       const { error } = await db.deletePembayaran(deleteTargetId);
       if (error) throw new Error(error.message);
       await Promise.all([fetchTagihan(selectedSiswa), fetchPembayaran(selectedSiswa)]);
+      if (selectedKelas) await fetchSiswaSummaryByKelas(selectedKelas);
       toast.success("✅ Pembayaran dihapus");
       setDeleteConfirmOpen(false);
       setDeleteTargetId(null);
@@ -219,6 +287,10 @@ export default function Tagihan() {
 
   /* derived */
   const filteredSiswa     = siswaList.filter((s) => {
+    const q = searchSiswa.toLowerCase().trim();
+    return !q || s.nama.toLowerCase().includes(q) || s.nis.toLowerCase().includes(q);
+  });
+  const filteredSiswaSummary = siswaSummary.filter((s) => {
     const q = searchSiswa.toLowerCase().trim();
     return !q || s.nama.toLowerCase().includes(q) || s.nis.toLowerCase().includes(q);
   });
@@ -260,10 +332,10 @@ export default function Tagihan() {
         {/* ── Filter Card ────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <User className="w-4 h-4 text-blue-500" /> Pilih Siswa
+            <User className="w-4 h-4 text-blue-500" /> Filter Kelas & Siswa
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Kelas */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
@@ -276,24 +348,6 @@ export default function Tagihan() {
               >
                 <option value="">Pilih Kelas...</option>
                 {kelas.map((k) => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
-              </select>
-            </div>
-
-            {/* Siswa */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5" /> Nama Siswa
-              </label>
-              <select
-                value={selectedSiswa}
-                onChange={(e) => setSelectedSiswa(e.target.value)}
-                disabled={!selectedKelas}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="">Pilih siswa...</option>
-                {filteredSiswa.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nama} ({s.nis})</option>
-                ))}
               </select>
             </div>
 
@@ -316,36 +370,91 @@ export default function Tagihan() {
             </div>
           </div>
 
-          {/* Search results dropdown */}
-          {selectedKelas && searchSiswa && (
-            <div className="mt-3">
-              {filteredSiswa.length > 0 ? (
-                <div className="border border-blue-100 rounded-xl bg-blue-50 p-3">
-                  <p className="text-xs font-semibold text-blue-600 mb-2">
-                    {filteredSiswa.length} siswa ditemukan
-                  </p>
-                  <div className="space-y-1 max-h-36 overflow-y-auto">
-                    {filteredSiswa.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => { setSelectedSiswa(s.id); setSearchSiswa(""); }}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-white hover:bg-blue-100 border border-blue-100 hover:border-blue-300 transition-colors"
-                      >
-                        <div className="text-sm font-semibold text-slate-800">{s.nama}</div>
-                        <div className="text-xs text-slate-400">{s.nis}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  Tidak ada siswa yang cocok dengan <strong>"{searchSiswa}"</strong>
-                </div>
-              )}
+          {selectedSiswa && (
+            <div className="mt-3 p-3 rounded-xl border border-blue-100 bg-blue-50 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs text-blue-600">Siswa dipilih</p>
+                <p className="text-sm font-semibold text-slate-800">{selectedSiswaData?.nama} ({selectedSiswaData?.nis})</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setSelectedSiswa("")}
+                className="rounded-lg border-blue-200 text-blue-700 hover:bg-blue-100"
+              >
+                Ganti Siswa
+              </Button>
             </div>
           )}
         </div>
+
+        {/* ── Tabel Siswa Per Kelas (muncul setelah pilih kelas) ───── */}
+        {selectedKelas && !selectedSiswa && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800">Data Siswa dan Keterangan Tagihan</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Klik nama siswa untuk masuk ke administrasi tagihan siswa.</p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+                {filteredSiswaSummary.length} siswa
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-4 py-3">Siswa</th>
+                    <th className="px-4 py-3">Jumlah Tagihan</th>
+                    <th className="px-4 py-3">Total</th>
+                    <th className="px-4 py-3">Terbayar</th>
+                    <th className="px-4 py-3">Sisa</th>
+                    <th className="px-4 py-3">Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summaryLoading ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-slate-400">Memuat ringkasan tagihan siswa...</td>
+                    </tr>
+                  ) : filteredSiswaSummary.length > 0 ? (
+                    filteredSiswaSummary.map((row) => {
+                      const lunas = row.total_sisa === 0 && row.jumlah_tagihan > 0;
+                      return (
+                        <tr key={row.siswa_id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSiswa(row.siswa_id)}
+                              className="text-left"
+                            >
+                              <p className="font-semibold text-blue-700 hover:text-blue-800 underline underline-offset-2">{row.nama}</p>
+                              <p className="text-xs text-slate-400">{row.nis}</p>
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-700">{row.jumlah_tagihan}</td>
+                          <td className="px-4 py-3 font-semibold text-slate-700">{formatRupiah(row.total_tagihan)}</td>
+                          <td className="px-4 py-3 font-semibold text-emerald-700">{formatRupiah(row.total_terbayar)}</td>
+                          <td className="px-4 py-3 font-semibold text-amber-700">{formatRupiah(row.total_sisa)}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${lunas ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                              {lunas ? "Lunas" : `Lunas ${row.jumlah_lunas}/${row.jumlah_tagihan}`}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-10 text-center text-slate-400">Data siswa tidak ditemukan pada kelas ini.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* ── Summary Strip (only when siswa selected) ──────── */}
         {selectedSiswa && (
@@ -563,7 +672,7 @@ export default function Tagihan() {
               </div>
             </div>
           </div>
-        ) : (
+        ) : !selectedKelas ? (
           /* Empty state */
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center py-24 px-8">
             <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-4">
@@ -574,7 +683,7 @@ export default function Tagihan() {
               Gunakan filter di atas untuk memilih kelas dan siswa terlebih dahulu.
             </p>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* ── Dialog: Pembayaran Baru / Edit ─────────────────────── */}
@@ -631,8 +740,8 @@ export default function Tagihan() {
                 onChange={(e) => setMetodePembayaran(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
-                <option value="transfer">Transfer Bank</option>
                 <option value="tunai">Tunai</option>
+                <option value="transfer">Transfer Bank</option>
                 <option value="qris">QRIS</option>
                 <option value="lainnya">Lainnya</option>
               </select>
