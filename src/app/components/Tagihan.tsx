@@ -184,7 +184,7 @@ export default function Tagihan() {
       jumlah: jumlahNum,
       metode_pembayaran: metodePembayaran,
       tanggal_pembayaran: new Date(tanggalBayar).toISOString(),
-      bukti_pembayaran: keterangan || null,
+      bukti_pembayaran: keterangan.trim(),
     };
     try {
       const { error } = editingPembayaran
