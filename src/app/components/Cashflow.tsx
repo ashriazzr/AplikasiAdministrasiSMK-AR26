@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
@@ -13,7 +13,7 @@ import {
 import { db } from "../../../utils/supabase/client";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { LayoutWrapper, PageHeader, PageSection, Typography, Spacing } from "./LayoutWrapper";
+import { LayoutWrapper, PageSection } from "./LayoutWrapper";
 
 interface Kategori { id: string; nama_kategori: string; jenis: "income" | "expense"; warna: string; icon: string; urutan: number; }
 interface Pengeluaran { id: string; kegiatan_id: string; deskripsi: string; jumlah: number; tanggal: string; kategori: string; keterangan?: string; }
@@ -35,7 +35,6 @@ export default function Cashflow() {
 
   const [txOpen, setTxOpen]         = useState(false);
   const [catOpen, setCatOpen]       = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [detailKegId, setDetailKegId] = useState<string>("");
   const [editingTx, setEditingTx]   = useState<Pengeluaran | null>(null);
   const [editingCat, setEditingCat] = useState<Kategori | null>(null);
@@ -49,12 +48,16 @@ export default function Cashflow() {
   useEffect(() => { loadAll(); }, []);
 
   useEffect(() => {
-    if (loading || !kegiatanIdParam || kegiatan.length === 0) return;
-    const target = kegiatan.find((item) => item.id === kegiatanIdParam);
-    if (!target) return;
-    setDetailKegId(target.id);
-    setDetailOpen(true);
-  }, [loading, kegiatan, kegiatanIdParam]);
+    if (loading || kegiatan.length === 0) return;
+
+    const target = kegiatanIdParam
+      ? kegiatan.find((item) => item.id === kegiatanIdParam)
+      : kegiatan[0];
+
+    if (target && target.id !== detailKegId) {
+      setDetailKegId(target.id);
+    }
+  }, [loading, kegiatan, kegiatanIdParam, detailKegId]);
 
   const loadAll = async () => {
     setLoading(true);
@@ -88,12 +91,6 @@ export default function Cashflow() {
 
   const handleRefresh = async () => { setRefreshing(true); await loadAll(); setRefreshing(false); toast.success("Data diperbarui"); };
 
-  const globalTotals = useMemo(() => {
-    let pemasukan = 0, pengeluaran = 0;
-    Object.values(summaries).forEach(s => { pemasukan += s.totalPemasukan; pengeluaran += s.totalPengeluaran; });
-    return { pemasukan, pengeluaran, saldo: pemasukan - pengeluaran };
-  }, [summaries]);
-
   const openAddTx = (kegiatanId: string, jenis: "income" | "expense" = "expense") => { setSelKegId(kegiatanId); setEditingTx(null); setTxForm({ tanggal: new Date().toISOString().split("T")[0], jenis, kategori_id: "", jumlah: "", deskripsi: "" }); setTxOpen(true); };
   const openEditTx = (tx: Pengeluaran, kegiatanId: string) => { setSelKegId(kegiatanId); setEditingTx(tx); setTxForm({ tanggal: tx.tanggal?.split("T")[0] ?? "", jenis: "expense", kategori_id: tx.kategori ?? "", jumlah: tx.jumlah?.toString() ?? "", deskripsi: tx.deskripsi ?? "" }); setTxOpen(true); };
 
@@ -109,383 +106,217 @@ export default function Cashflow() {
       setTxOpen(false); await loadActivityData(selKegId);
     } catch { toast.error("Gagal menyimpan catatan"); }
   };
-
-  const handleDeleteTx = async (id: string, kegiatanId: string) => {
-    if (!confirm("Hapus transaksi ini?")) return;
-    const { error } = await db.deletePengeluaran(id);
-    if (error) { toast.error("Gagal menghapus"); return; }
-    toast.success("Transaksi dihapus"); await loadActivityData(kegiatanId);
-  };
-
-  const handleSaveCat = async () => {
-    if (!catForm.nama_kategori.trim()) { toast.error("Nama kategori wajib diisi"); return; }
-    try {
-      if (editingCat) { const { error } = await db.updateKategori(editingCat.id, catForm); if (error) throw error; toast.success("Kategori diperbarui"); }
-      else { const { error } = await db.createKategori(catForm); if (error) throw error; toast.success("Kategori ditambahkan"); }
-      const res = await db.getKategori(); setCategories((res.data as Kategori[]) || []);
-      setEditingCat(null); setCatForm({ nama_kategori: "", jenis: "expense", warna: "#10b981", icon: "tag", urutan: 0 });
-    } catch { toast.error("Gagal menyimpan kategori"); }
-  };
-
-  const handleDeleteCat = async (id: string) => {
-    if (!confirm("Hapus kategori ini?")) return;
-    const { error } = await db.deleteKategori(id);
-    if (error) { toast.error("Gagal menghapus"); return; }
-    const res = await db.getKategori(); setCategories((res.data as Kategori[]) || []); toast.success("Kategori dihapus");
-  };
-
-  const exportKegiatan = (kegiatanId: string) => {
-    const kg = kegiatan.find(k => k.id === kegiatanId); const s = summaries[kegiatanId]; if (!s) return;
-    const rows = [
-      ...s.pembayaranList.map(p => ({ Tanggal: fmtDate(p.tanggal_pembayaran), Jenis: "Pemasukan", Keterangan: `Pembayaran — ${p.siswa?.nama ?? "-"}`, Nominal: p.jumlah })),
-      ...s.pengeluaranList.map(p => ({ Tanggal: fmtDate(p.tanggal), Jenis: "Pengeluaran", Keterangan: p.deskripsi || "-", Nominal: p.jumlah })),
-    ];
-    const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Cashflow");
-    XLSX.writeFile(wb, `Cashflow_${kg?.nama_kegiatan ?? kegiatanId}_${new Date().toISOString().split("T")[0]}.xlsx`);
-    toast.success("File Excel diunduh");
-  };
-
-  const detailKg   = kegiatan.find(k => k.id === detailKegId);
-  const detailSumm = summaries[detailKegId];
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center space-y-2">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"/>
-        <p className="text-sm text-gray-500">Memuat data cashflow...</p>
-      </div>
-    </div>
-  );
-
   return (
-    <LayoutWrapper title="Cashflow" subtitle="Pemasukan dari pembayaran siswa dan pengeluaran per kegiatan">
+    <LayoutWrapper title="Cashflow" subtitle="Detail pemasukan dan pengeluaran kegiatan">
       <PageSection>
-        {/* Action Buttons */}
-        <div className="flex gap-2 justify-end">
-          {kegiatanIdParam && detailKg && (
-            <div className="mr-auto hidden md:flex items-center gap-2 text-sm text-gray-600">
-              <span className="text-gray-400">Kegiatan:</span>
-              <span className="font-semibold text-gray-900">{detailKg.nama_kegiatan}</span>
-            </div>
-          )}
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-            <RefreshCw size={14} className={`mr-1.5 ${refreshing ? "animate-spin" : ""}`}/>
-            {refreshing ? "Memuat..." : "Perbarui"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori:"",jenis:"expense",warna:"#10b981",icon:"tag",urutan:0 }); setCatOpen(true); }}>
-            <Settings size={14} className="mr-1.5"/> Kategori
-          </Button>
-        </div>
-      </PageSection>
-
-      {/* Global Summary */}
-      <PageSection>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: "Total Pemasukan",   val: globalTotals.pemasukan,   icon: <TrendingUp size={20}/>,  color: "text-emerald-600", bg: "bg-emerald-50" },
-          { label: "Total Pengeluaran", val: globalTotals.pengeluaran, icon: <TrendingDown size={20}/>, color: "text-red-600",     bg: "bg-red-50" },
-          { label: "Saldo Bersih",      val: globalTotals.saldo,       icon: <DollarSign size={20}/>,  color: globalTotals.saldo >= 0 ? "text-blue-600" : "text-orange-600", bg: globalTotals.saldo >= 0 ? "bg-blue-50" : "bg-orange-50" },
-        ].map(c => (
-          <div key={c.label} className={`${c.bg} rounded-xl p-5 border border-gray-100`}>
-            <div className={`${c.color} mb-2.5`}>{c.icon}</div>
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{c.label}</p>
-            <p className={`text-2xl font-bold ${c.color} mt-1.5`}>{rp(c.val)}</p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Kegiatan aktif</p>
+            <p className="text-lg font-bold text-gray-900 truncate">{detailKg?.nama_kegiatan ?? "Tidak ada kegiatan"}</p>
+            <p className="text-sm text-gray-500">Detail pemasukan dan pengeluaran kegiatan</p>
           </div>
-        ))}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+              <RefreshCw size={14} className={`mr-1.5 ${refreshing ? "animate-spin" : ""}`}/>
+              {refreshing ? "Memuat..." : "Perbarui"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori: "", jenis: "expense", warna: "#10b981", icon: "tag", urutan: 0 }); setCatOpen(true); }}>
+              <Settings size={14} className="mr-1.5"/> Kategori
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => detailKegId && exportKegiatan(detailKegId)} disabled={!detailKegId}>
+              <Download size={14} className="mr-1.5"/> Export
+            </Button>
+            <Button size="sm" onClick={() => detailKegId && openAddTx(detailKegId)} disabled={!detailKegId}>
+              <Plus size={14} className="mr-1.5"/> Catat Transaksi
+            </Button>
+          </div>
         </div>
       </PageSection>
 
-      {/* Kegiatan Cards */}
       <PageSection>
-        {kegiatan.length === 0 ? (
-          <Card><CardContent className="py-16 text-center text-gray-400">
-            <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-30"/>
-            <p className="font-medium">Tidak ada kegiatan administrasi</p>
-            <p className="text-sm mt-1">Buat kegiatan terlebih dahulu di menu Kegiatan Administrasi</p>
-          </CardContent></Card>
+        {!detailKg || !detailSumm ? (
+          <Card>
+            <CardContent className="py-16 text-center text-gray-400">
+              <DollarSign className="w-10 h-10 mx-auto mb-3 opacity-30"/>
+              <p className="font-medium">Tidak ada kegiatan administrasi</p>
+              <p className="text-sm mt-1">Buat kegiatan terlebih dahulu di menu Kegiatan Administrasi</p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {kegiatan.map(kg => {
-            const s = summaries[kg.id];
-            const txCount = (s?.pengeluaranList.length ?? 0) + (s?.pembayaranList.length ?? 0);
-            return (
-              <Card key={kg.id} className="hover:shadow-md transition-all border border-gray-100">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base leading-snug">{kg.nama_kegiatan}</CardTitle>
-                  <p className="text-xs text-gray-400">{txCount} transaksi</p>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {s ? (<>
-                    <div className="flex justify-between items-center px-3 py-2 bg-emerald-50 rounded-lg">
-                      <div className="flex items-center gap-2 text-emerald-600"><TrendingUp size={14}/><span className="text-xs font-medium">Pemasukan</span></div>
-                      <span className="text-sm font-bold text-emerald-600">{rp(s.totalPemasukan)}</span>
-                    </div>
-                    <div className="flex justify-between items-center px-3 py-2 bg-red-50 rounded-lg">
-                      <div className="flex items-center gap-2 text-red-500"><TrendingDown size={14}/><span className="text-xs font-medium">Pengeluaran</span></div>
-                      <span className="text-sm font-bold text-red-500">{rp(s.totalPengeluaran)}</span>
-                    </div>
-                    <div className={`flex justify-between items-center px-3 py-2 rounded-lg ${s.saldo >= 0 ? "bg-blue-50" : "bg-orange-50"}`}>
-                      <div className={`flex items-center gap-2 ${s.saldo >= 0 ? "text-blue-600" : "text-orange-600"}`}><DollarSign size={14}/><span className="text-xs font-medium">Saldo</span></div>
-                      <span className={`text-sm font-bold ${s.saldo >= 0 ? "text-blue-600" : "text-orange-600"}`}>{rp(s.saldo)}</span>
-                    </div>
-                    <div className="flex gap-1 pt-0.5">
-                      <Button size="sm" onClick={() => openAddTx(kg.id)} className="flex-1 h-8 text-xs gap-1"><Plus size={12}/> Catat Transaksi</Button>
-                      <Button variant="outline" size="sm" className="h-8 text-xs gap-1 flex-1" onClick={() => { setDetailKegId(kg.id); setDetailOpen(true); }}>Detail</Button>
-                      <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => exportKegiatan(kg.id)} title="Export Excel"><Download size={13}/></Button>
-                    </div>
-                  </>) : <div className="py-6 text-center text-xs text-gray-400">Memuat...</div>}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+          <div className="space-y-6">
+            <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pemasukan Siswa</p>
+                <p className="text-lg font-bold text-emerald-600">{rp(detailSumm.pembayaranList.reduce((s, p) => s + (p.jumlah ?? 0), 0))}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{detailSumm.pembayaranList.length} transaksi otomatis</p>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pemasukan Manual</p>
+                <p className="text-lg font-bold text-emerald-600">{rp(detailSumm.pengeluaranList.filter(p => p.keterangan === "income").reduce((s, p) => s + (p.jumlah ?? 0), 0))}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{detailSumm.pengeluaranList.filter(p => p.keterangan === "income").length} catatan manual</p>
+              </div>
+              <div className="bg-red-50 border border-red-100 rounded-xl p-4">
+                <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pengeluaran</p>
+                <p className="text-lg font-bold text-red-500">{rp(detailSumm.totalPengeluaran)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{detailSumm.pengeluaranList.filter(p => p.keterangan !== "income").length} catatan</p>
+              </div>
+            </section>
+
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-gray-400 inline-block"/>
+                  Catatan Transaksi Manual
+                  <span className="text-xs font-normal text-gray-400">({detailSumm.pengeluaranList.length})</span>
+                </h3>
+                <Button size="sm" variant="outline" onClick={() => detailKegId && openAddTx(detailKegId)} className="h-7 text-xs gap-1">
+                  <Plus size={11}/> Catat
+                </Button>
+              </div>
+              {detailSumm.pengeluaranList.length === 0 ? (
+                <div className="border border-dashed rounded-xl py-10 text-center text-sm text-gray-400 bg-white">
+                  Belum ada catatan transaksi manual
+                  <div className="mt-2">
+                    <Button size="sm" variant="outline" onClick={() => detailKegId && openAddTx(detailKegId)}>
+                      <Plus size={12} className="mr-1.5"/> Catat Transaksi
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border bg-white overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" style={{ minWidth: 500 }}>
+                      <thead className="bg-gray-50 border-b">
+                        <tr className="text-xs text-gray-500 uppercase tracking-wide">
+                          <th className="px-4 py-2.5 text-left font-medium">Tanggal</th>
+                          <th className="px-4 py-2.5 text-left font-medium">Keterangan</th>
+                          <th className="px-4 py-2.5 text-left font-medium">Kategori</th>
+                          <th className="px-4 py-2.5 text-center font-medium">Jenis</th>
+                          <th className="px-4 py-2.5 text-right font-medium">Jumlah</th>
+                          <th className="px-4 py-2.5 text-center font-medium w-16">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {detailSumm.pengeluaranList
+                          .slice()
+                          .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime())
+                          .map((tx) => {
+                            const cat = categories.find((c) => c.id === tx.kategori);
+                            const isIncome = tx.keterangan === "income";
+                            return (
+                              <tr key={tx.id} className={`hover:bg-gray-50 transition-colors ${isIncome ? "bg-emerald-50/30" : ""}`}>
+                                <td className="px-4 py-2.5 text-xs text-gray-500">{fmtDate(tx.tanggal)}</td>
+                                <td className="px-4 py-2.5 text-gray-800">{tx.deskripsi || "-"}</td>
+                                <td className="px-4 py-2.5">
+                                  {cat
+                                    ? <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white" style={{ background: cat.warna }}>{cat.nama_kategori}</span>
+                                    : <span className="text-xs text-gray-400">-</span>}
+                                </td>
+                                <td className="px-4 py-2.5 text-center">
+                                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isIncome ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                                    {isIncome ? "Pemasukan" : "Pengeluaran"}
+                                  </span>
+                                </td>
+                                <td className={`px-4 py-2.5 text-right font-bold ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
+                                  {isIncome ? "+" : "-"}{rp(tx.jumlah)}
+                                </td>
+                                <td className="px-4 py-2.5 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditTx(tx, detailKegId)}>
+                                      <Edit2 size={12}/>
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => handleDeleteTx(tx.id, detailKegId)}>
+                                      <Trash2 size={12}/>
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section className={`rounded-xl p-5 border ${detailSumm.saldo >= 0 ? "bg-blue-50 border-blue-200" : "bg-orange-50 border-orange-200"}`}>
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Saldo Bersih</p>
+                  <p className={`text-3xl font-bold ${detailSumm.saldo >= 0 ? "text-blue-600" : "text-orange-600"}`}>{rp(detailSumm.saldo)}</p>
+                </div>
+                <div className="text-xs text-gray-500 text-right space-y-1.5 shrink-0">
+                  <div className="flex items-center gap-2 justify-end">
+                    <span className="text-gray-500">Pemasukan</span>
+                    <span className="font-bold text-emerald-600 tabular-nums">{rp(detailSumm.totalPemasukan)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <span className="text-gray-500">Pengeluaran</span>
+                    <span className="font-bold text-red-500 tabular-nums">{rp(detailSumm.totalPengeluaran)}</span>
+                  </div>
+                  <div className="pt-1 border-t flex items-center gap-2 justify-end">
+                    <span className="text-gray-600 font-medium">Saldo</span>
+                    <span className={`font-bold tabular-nums ${detailSumm.saldo >= 0 ? "text-blue-600" : "text-orange-600"}`}>{rp(detailSumm.saldo)}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
         )}
       </PageSection>
 
-      {/* Dialog DETAIL */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent
-          className="
-            !max-w-5xl w-[95vw]
-            !max-h-[90vh] h-[90vh]
-            !p-0 gap-0
-            overflow-hidden
-            grid
-          "
-          style={{ gridTemplateRows: "auto 1fr auto" }}
-        >
-          {/* ── Row 1: Header (tidak scroll) ─────────────────────────── */}
-          <div className="px-6 pt-5 pb-4 border-b bg-white">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h2 className="text-lg font-bold text-gray-900 truncate">{detailKg?.nama_kegiatan}</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Detail pemasukan dan pengeluaran kegiatan</p>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <Button size="sm" variant="outline" onClick={() => exportKegiatan(detailKegId)}>
-                  <Download size={13} className="mr-1.5"/> Export
-                </Button>
-                <Button size="sm" onClick={() => { setDetailOpen(false); openAddTx(detailKegId); }}>
-                  <Plus size={13} className="mr-1.5"/> Catat Transaksi
-                </Button>
-              </div>
-            </div>
-            {detailSumm && (
-              <div className="flex gap-5 mt-3">
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shrink-0"/>
-                  <span className="text-gray-500 text-xs">Pemasukan</span>
-                  <span className="font-bold text-emerald-600">{rp(detailSumm.totalPemasukan)}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className="w-2 h-2 rounded-full bg-red-500 inline-block shrink-0"/>
-                  <span className="text-gray-500 text-xs">Pengeluaran</span>
-                  <span className="font-bold text-red-500">{rp(detailSumm.totalPengeluaran)}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span className={`w-2 h-2 rounded-full inline-block shrink-0 ${detailSumm.saldo >= 0 ? "bg-blue-500" : "bg-orange-500"}`}/>
-                  <span className="text-gray-500 text-xs">Saldo</span>
-                  <span className={`font-bold ${detailSumm.saldo >= 0 ? "text-blue-600" : "text-orange-600"}`}>{rp(detailSumm.saldo)}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Row 2: Body (scroll di sini saja) ────────────────────── */}
-          <div className="overflow-y-auto overscroll-contain px-6 py-5 space-y-6 bg-gray-50/40">
-            {!detailSumm ? (
-              <div className="flex items-center justify-center h-40 text-gray-400 text-sm">Memuat data...</div>
-            ) : (
-              <>
-                {/* Ringkasan Pemasukan — tanpa tabel siswa */}
-                <section className="grid grid-cols-3 gap-3">
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pemasukan Siswa</p>
-                    <p className="text-lg font-bold text-emerald-600">{rp(detailSumm.pembayaranList.reduce((s, p) => s + (p.jumlah ?? 0), 0))}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{detailSumm.pembayaranList.length} transaksi otomatis</p>
-                  </div>
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pemasukan Manual</p>
-                    <p className="text-lg font-bold text-emerald-600">{rp(detailSumm.pengeluaranList.filter(p => p.keterangan === "income").reduce((s, p) => s + (p.jumlah ?? 0), 0))}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{detailSumm.pengeluaranList.filter(p => p.keterangan === "income").length} catatan manual</p>
-                  </div>
-                  <div className="bg-red-50 border border-red-100 rounded-xl p-4">
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Pengeluaran</p>
-                    <p className="text-lg font-bold text-red-500">{rp(detailSumm.totalPengeluaran)}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{detailSumm.pengeluaranList.filter(p => p.keterangan !== "income").length} catatan</p>
-                  </div>
-                </section>
-
-                {/* Tabel Catatan Transaksi (pemasukan manual + pengeluaran) */}
-                <section>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-gray-400 inline-block"/>
-                      Catatan Transaksi Manual
-                      <span className="text-xs font-normal text-gray-400">({detailSumm.pengeluaranList.length})</span>
-                    </h3>
-                    <Button size="sm" variant="outline" onClick={() => { setDetailOpen(false); openAddTx(detailKegId); }} className="h-7 text-xs gap-1">
-                      <Plus size={11}/> Catat
-                    </Button>
-                  </div>
-                  {detailSumm.pengeluaranList.length === 0 ? (
-                    <div className="border border-dashed rounded-xl py-10 text-center text-sm text-gray-400 bg-white">
-                      Belum ada catatan transaksi manual
-                      <div className="mt-2">
-                        <Button size="sm" variant="outline" onClick={() => { setDetailOpen(false); openAddTx(detailKegId); }}>
-                          <Plus size={12} className="mr-1.5"/> Catat Transaksi
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border bg-white overflow-hidden">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm" style={{ minWidth: 500 }}>
-                          <thead className="bg-gray-50 border-b">
-                            <tr className="text-xs text-gray-500 uppercase tracking-wide">
-                              <th className="px-4 py-2.5 text-left font-medium">Tanggal</th>
-                              <th className="px-4 py-2.5 text-left font-medium">Keterangan</th>
-                              <th className="px-4 py-2.5 text-left font-medium">Kategori</th>
-                              <th className="px-4 py-2.5 text-center font-medium">Jenis</th>
-                              <th className="px-4 py-2.5 text-right font-medium">Jumlah</th>
-                              <th className="px-4 py-2.5 text-center font-medium w-16">Aksi</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-50">
-                            {detailSumm.pengeluaranList
-                              .slice().sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime())
-                              .map(tx => {
-                                const cat = categories.find(c => c.id === tx.kategori);
-                                const isIncome = tx.keterangan === "income";
-                                return (
-                                  <tr key={tx.id} className={`hover:bg-gray-50 transition-colors ${isIncome ? "bg-emerald-50/30" : ""}`}>
-                                    <td className="px-4 py-2.5 text-xs text-gray-500">{fmtDate(tx.tanggal)}</td>
-                                    <td className="px-4 py-2.5 text-gray-800">{tx.deskripsi || "-"}</td>
-                                    <td className="px-4 py-2.5">
-                                      {cat
-                                        ? <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white" style={{ background: cat.warna }}>{cat.nama_kategori}</span>
-                                        : <span className="text-xs text-gray-400">-</span>}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-center">
-                                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isIncome ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                                        {isIncome ? "Pemasukan" : "Pengeluaran"}
-                                      </span>
-                                    </td>
-                                    <td className={`px-4 py-2.5 text-right font-bold ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
-                                      {isIncome ? "+" : "-"}{rp(tx.jumlah)}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-center">
-                                      <div className="flex items-center justify-center gap-1">
-                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditTx(tx, detailKegId)}>
-                                          <Edit2 size={12}/>
-                                        </Button>
-                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500 hover:text-red-700" onClick={() => handleDeleteTx(tx.id, detailKegId)}>
-                                          <Trash2 size={12}/>
-                                        </Button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </section>
-
-                {/* Ringkasan Saldo */}
-                <section className={`rounded-xl p-5 border ${detailSumm.saldo >= 0 ? "bg-blue-50 border-blue-200" : "bg-orange-50 border-orange-200"}`}>
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Saldo Bersih</p>
-                      <p className={`text-3xl font-bold ${detailSumm.saldo >= 0 ? "text-blue-600" : "text-orange-600"}`}>{rp(detailSumm.saldo)}</p>
-                    </div>
-                    <div className="text-xs text-gray-500 text-right space-y-1.5 shrink-0">
-                      <div className="flex items-center gap-2 justify-end">
-                        <span className="text-gray-500">Pemasukan</span>
-                        <span className="font-bold text-emerald-600 tabular-nums">{rp(detailSumm.totalPemasukan)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 justify-end">
-                        <span className="text-gray-500">Pengeluaran</span>
-                        <span className="font-bold text-red-500 tabular-nums">{rp(detailSumm.totalPengeluaran)}</span>
-                      </div>
-                      <div className="pt-1 border-t flex items-center gap-2 justify-end">
-                        <span className="text-gray-600 font-medium">Saldo</span>
-                        <span className={`font-bold tabular-nums ${detailSumm.saldo >= 0 ? "text-blue-600" : "text-orange-600"}`}>{rp(detailSumm.saldo)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </>
-            )}
-          </div>
-
-          {/* ── Row 3: Footer (tidak scroll) ─────────────────────────── */}
-          <div className="px-6 py-3.5 border-t bg-white flex justify-end">
-            <Button variant="outline" size="sm" onClick={() => setDetailOpen(false)}>Tutup</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Tambah/Edit Pengeluaran */}
-      <Dialog open={txOpen} onOpenChange={open => { if (!open) { setTxOpen(false); setEditingTx(null); } else setTxOpen(true); }}>
+      <Dialog open={txOpen} onOpenChange={(open) => { if (!open) { setTxOpen(false); setEditingTx(null); } else setTxOpen(true); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{editingTx ? "Edit Catatan" : "Catat Transaksi"}</DialogTitle>
-            <DialogDescription>{kegiatan.find(k => k.id === selKegId)?.nama_kegiatan ?? ""}</DialogDescription>
+            <DialogDescription>{kegiatan.find((k) => k.id === selKegId)?.nama_kegiatan ?? ""}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            {/* Toggle Jenis */}
             <div>
               <Label>Jenis Transaksi</Label>
               <div className="flex mt-1.5 rounded-lg border border-gray-200 overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => setTxForm(p => ({ ...p, jenis: "income", kategori_id: "" }))}
+                  onClick={() => setTxForm((p) => ({ ...p, jenis: "income", kategori_id: "" }))}
                   className={`flex-1 py-2 text-sm font-medium transition-colors ${txForm.jenis === "income" ? "bg-emerald-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                 >
                   ↑ Pemasukan
                 </button>
                 <button
                   type="button"
-                  onClick={() => setTxForm(p => ({ ...p, jenis: "expense", kategori_id: "" }))}
+                  onClick={() => setTxForm((p) => ({ ...p, jenis: "expense", kategori_id: "" }))}
                   className={`flex-1 py-2 text-sm font-medium transition-colors border-l border-gray-200 ${txForm.jenis === "expense" ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
                 >
                   ↓ Pengeluaran
                 </button>
               </div>
             </div>
-            <div><Label>Tanggal</Label><Input type="date" value={txForm.tanggal} onChange={e => setTxForm(p => ({ ...p, tanggal: e.target.value }))}/></div>
+            <div><Label>Tanggal</Label><Input type="date" value={txForm.tanggal} onChange={(e) => setTxForm((p) => ({ ...p, tanggal: e.target.value }))}/></div>
             <div>
               <Label>Kategori <span className="text-gray-400 text-xs">(opsional)</span></Label>
-              <Select value={txForm.kategori_id} onValueChange={v => setTxForm(p => ({ ...p, kategori_id: v }))}>
+              <Select value={txForm.kategori_id} onValueChange={(v) => setTxForm((p) => ({ ...p, kategori_id: v }))}>
                 <SelectTrigger><SelectValue placeholder="Pilih kategori"/></SelectTrigger>
                 <SelectContent>
-                  {categories.filter(c => c.jenis === txForm.jenis).map(c => <SelectItem key={c.id} value={c.id}>{c.nama_kategori}</SelectItem>)}
-                  {categories.filter(c => c.jenis === txForm.jenis).length === 0 && (
-                    <SelectItem value="_none" disabled>Belum ada kategori — tambah di Kelola Kategori</SelectItem>
+                  {categories.filter((c) => c.jenis === txForm.jenis).map((c) => <SelectItem key={c.id} value={c.id}>{c.nama_kategori}</SelectItem>)}
+                  {categories.filter((c) => c.jenis === txForm.jenis).length === 0 && (
+                    <SelectItem value="_none" disabled>Belum ada kategori - tambah di Kelola Kategori</SelectItem>
                   )}
                 </SelectContent>
               </Select>
             </div>
-            <div><Label>Nominal (Rp)</Label><Input type="number" min="0" placeholder="0" value={txForm.jumlah} onChange={e => setTxForm(p => ({ ...p, jumlah: e.target.value }))}/></div>
-            <div><Label>Keterangan</Label><Input placeholder={txForm.jenis === "income" ? "Contoh: Dana bantuan, Donasi..." : "Contoh: Pembelian alat tulis..."} value={txForm.deskripsi} onChange={e => setTxForm(p => ({ ...p, deskripsi: e.target.value }))}/></div>
+            <div><Label>Nominal (Rp)</Label><Input type="number" min="0" placeholder="0" value={txForm.jumlah} onChange={(e) => setTxForm((p) => ({ ...p, jumlah: e.target.value }))}/></div>
+            <div><Label>Keterangan</Label><Input placeholder={txForm.jenis === "income" ? "Contoh: Dana bantuan, Donasi..." : "Contoh: Pembelian alat tulis..."} value={txForm.deskripsi} onChange={(e) => setTxForm((p) => ({ ...p, deskripsi: e.target.value }))}/></div>
           </div>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setTxOpen(false)}>Batal</Button>
-            <Button
-              onClick={handleSaveTx}
-              className={txForm.jenis === "income" ? "bg-emerald-600 hover:bg-emerald-700" : ""}
-            >
+            <Button onClick={handleSaveTx} className={txForm.jenis === "income" ? "bg-emerald-600 hover:bg-emerald-700" : ""}>
               {editingTx ? "Perbarui" : txForm.jenis === "income" ? "Simpan Pemasukan" : "Simpan Pengeluaran"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Kelola Kategori */}
       <Dialog open={catOpen} onOpenChange={setCatOpen}>
         <DialogContent
           className="!max-w-2xl w-[90vw] !max-h-[85vh] h-[85vh] !p-0 gap-0 overflow-hidden grid"
@@ -499,10 +330,10 @@ export default function Cashflow() {
             <div className="border rounded-xl p-4 bg-gray-50">
               <p className="text-sm font-semibold mb-3">{editingCat ? "Edit Kategori" : "Tambah Kategori Baru"}</p>
               <div className="space-y-3">
-                <div><Label>Nama Kategori</Label><Input value={catForm.nama_kategori} onChange={e => setCatForm(p => ({ ...p, nama_kategori: e.target.value }))} placeholder="Contoh: Pembelian Alat, Honorarium..."/></div>
+                <div><Label>Nama Kategori</Label><Input value={catForm.nama_kategori} onChange={(e) => setCatForm((p) => ({ ...p, nama_kategori: e.target.value }))} placeholder="Contoh: Pembelian Alat, Honorarium..."/></div>
                 <div>
                   <Label>Jenis</Label>
-                  <Select value={catForm.jenis} onValueChange={v => setCatForm(p => ({ ...p, jenis: v as any }))}>
+                  <Select value={catForm.jenis} onValueChange={(v) => setCatForm((p) => ({ ...p, jenis: v as any }))}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent><SelectItem value="expense">Pengeluaran</SelectItem><SelectItem value="income">Pemasukan (manual)</SelectItem></SelectContent>
                   </Select>
@@ -510,20 +341,24 @@ export default function Cashflow() {
                 <div>
                   <Label>Warna</Label>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {COLOR_PRESETS.map(c => (
-                      <button key={c} className={`w-7 h-7 rounded-md border-2 transition-transform hover:scale-110 ${catForm.warna === c ? "border-gray-900 scale-110" : "border-transparent"}`}
-                        style={{ background: c }} onClick={() => setCatForm(p => ({ ...p, warna: c }))}/>
+                    {COLOR_PRESETS.map((c) => (
+                      <button
+                        key={c}
+                        className={`w-7 h-7 rounded-md border-2 transition-transform hover:scale-110 ${catForm.warna === c ? "border-gray-900 scale-110" : "border-transparent"}`}
+                        style={{ background: c }}
+                        onClick={() => setCatForm((p) => ({ ...p, warna: c }))}
+                      />
                     ))}
                   </div>
                 </div>
                 <div className="flex gap-2 pt-1">
                   <Button onClick={handleSaveCat} className="flex-1">{editingCat ? "Perbarui" : "Tambah"}</Button>
-                  {editingCat && <Button variant="outline" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori:"",jenis:"expense",warna:"#10b981",icon:"tag",urutan:0 }); }}>Batal</Button>}
+                  {editingCat && <Button variant="outline" onClick={() => { setEditingCat(null); setCatForm({ nama_kategori: "", jenis: "expense", warna: "#10b981", icon: "tag", urutan: 0 }); }}>Batal</Button>}
                 </div>
               </div>
             </div>
-            {["expense","income"].map(jenis => {
-              const list = categories.filter(c => c.jenis === jenis);
+            {["expense", "income"].map((jenis) => {
+              const list = categories.filter((c) => c.jenis === jenis);
               return (
                 <div key={jenis}>
                   <p className={`text-sm font-semibold mb-2 ${jenis === "income" ? "text-emerald-700" : "text-red-600"}`}>
@@ -531,7 +366,7 @@ export default function Cashflow() {
                   </p>
                   {list.length === 0
                     ? <p className="text-xs text-gray-400 italic">Belum ada kategori</p>
-                    : <div className="space-y-1.5">{list.map(cat => (
+                    : <div className="space-y-1.5">{list.map((cat) => (
                         <div key={cat.id} className="flex items-center gap-3 border rounded-lg px-3 py-2 bg-white hover:bg-gray-50">
                           <div className="w-4 h-4 rounded shrink-0" style={{ background: cat.warna }}/>
                           <p className="text-sm font-medium flex-1">{cat.nama_kategori}</p>
