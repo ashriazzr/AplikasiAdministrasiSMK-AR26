@@ -77,6 +77,7 @@ export default function Rombel() {
     kelas_id: "",
     nis: "",
     nisn: "",
+    status_siswa: "aktif" as "aktif" | "pindahan" | "keluar",
     jenis_kelamin: "",
     tanggal_lahir: "",
     alamat: "",
@@ -139,6 +140,11 @@ export default function Rombel() {
   // ─── SISWA CRUD ────────────────────────────────────────────────────────
   const handleSiswaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (siswaForm.status_siswa === "pindahan" && !siswaForm.asal_sekolah.trim()) {
+      toast.error("Siswa pindahan wajib isi nama SMP asal");
+      return;
+    }
 
     try {
       if (editingSiswa) {
@@ -317,6 +323,7 @@ export default function Rombel() {
         kelas_id: siswa.kelas_id || "",
         nis: siswa.nis,
         nisn: siswa.nisn || "",
+        status_siswa: (siswa.status_siswa || "aktif") as "aktif" | "pindahan" | "keluar",
         jenis_kelamin: siswa.jenis_kelamin || "",
         tanggal_lahir: siswa.tanggal_lahir || "",
         alamat: siswa.alamat || "",
@@ -339,6 +346,7 @@ export default function Rombel() {
       kelas_id: "",
       nis: "",
       nisn: "",
+      status_siswa: "aktif",
       jenis_kelamin: "",
       tanggal_lahir: "",
       alamat: "",
@@ -836,13 +844,14 @@ export default function Rombel() {
                                   <th className="text-left py-2 px-3 w-14">No</th>
                                   <th className="text-left py-2 px-3">Nama Siswa</th>
                                   <th className="text-left py-2 px-3 w-28">NIS</th>
+                                  <th className="text-left py-2 px-3 w-36">Status</th>
                                   <th className="text-center py-2 px-3 w-28">Aksi</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {displayedSelectedKelasSiswa.length === 0 ? (
                                   <tr>
-                                    <td colSpan={4} className="text-center py-10 text-gray-500 text-sm">
+                                    <td colSpan={5} className="text-center py-10 text-gray-500 text-sm">
                                       Tidak ada siswa yang cocok dengan pencarian
                                     </td>
                                   </tr>
@@ -861,6 +870,19 @@ export default function Rombel() {
                                         </div>
                                       </td>
                                       <td className="py-2 px-3 text-gray-600">{siswa.nis || "-"}</td>
+                                      <td className="py-2 px-3">
+                                        <span
+                                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                                            siswa.status_siswa === "keluar"
+                                              ? "bg-red-100 text-red-700"
+                                              : siswa.status_siswa === "pindahan"
+                                                ? "bg-orange-100 text-orange-700"
+                                                : "bg-emerald-100 text-emerald-700"
+                                          }`}
+                                        >
+                                          {siswa.status_siswa || "aktif"}
+                                        </span>
+                                      </td>
                                       <td className="py-2 px-3">
                                         <div className="flex gap-1 justify-center">
                                           <Button
@@ -1165,6 +1187,7 @@ export default function Rombel() {
                       <th className="text-left py-2 px-3">Nama</th>
                       <th className="text-left py-2 px-3">NIS</th>
                       <th className="text-left py-2 px-3">Kelas</th>
+                      <th className="text-left py-2 px-3">Status</th>
                       <th className="text-left py-2 px-3">Jenis Kelamin</th>
                       <th className="text-left py-2 px-3">RFID Card</th>
                       <th className="text-center py-2 px-3">Aksi</th>
@@ -1174,7 +1197,7 @@ export default function Rombel() {
                     {filteredSiswa.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className="text-center py-8 text-gray-500"
                         >
                           Belum ada siswa
@@ -1214,6 +1237,19 @@ export default function Rombel() {
                                   Belum ada kelas
                                 </span>
                               )}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-semibold ${
+                                  siswa.status_siswa === "keluar"
+                                    ? "bg-red-100 text-red-700"
+                                    : siswa.status_siswa === "pindahan"
+                                      ? "bg-orange-100 text-orange-700"
+                                      : "bg-emerald-100 text-emerald-700"
+                                }`}
+                              >
+                                {siswa.status_siswa || "aktif"}
+                              </span>
                             </td>
                             <td className="py-2 px-3">
                               {siswa.jenis_kelamin || "-"}
@@ -1333,6 +1369,24 @@ export default function Rombel() {
               </select>
             </div>
             <div>
+              <Label>Status Siswa</Label>
+              <select
+                value={siswaForm.status_siswa}
+                onChange={(e) =>
+                  setSiswaForm((p) => ({
+                    ...p,
+                    status_siswa: e.target.value as "aktif" | "pindahan" | "keluar",
+                    asal_sekolah: e.target.value === "pindahan" ? p.asal_sekolah : "",
+                  }))
+                }
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="aktif">Aktif</option>
+                <option value="pindahan">Pindahan</option>
+                <option value="keluar">Keluar</option>
+              </select>
+            </div>
+            <div>
               <Label>Tanggal Lahir</Label>
               <Input
                 type="date"
@@ -1349,6 +1403,17 @@ export default function Rombel() {
                 onChange={(e) =>
                   setSiswaForm((p) => ({ ...p, alamat: e.target.value }))
                 }
+              />
+            </div>
+            <div>
+              <Label>{siswaForm.status_siswa === "pindahan" ? "Nama SMP Asal" : "Asal Sekolah"}</Label>
+              <Input
+                value={siswaForm.asal_sekolah}
+                placeholder={siswaForm.status_siswa === "pindahan" ? "Wajib diisi untuk siswa pindahan" : "Opsional"}
+                onChange={(e) =>
+                  setSiswaForm((p) => ({ ...p, asal_sekolah: e.target.value }))
+                }
+                required={siswaForm.status_siswa === "pindahan"}
               />
             </div>
 
