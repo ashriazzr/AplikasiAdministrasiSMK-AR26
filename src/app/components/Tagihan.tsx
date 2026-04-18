@@ -7,17 +7,20 @@ import { Label } from "./ui/label";
 import {
   Edit, Trash2, AlertCircle, Clock, FileText,
   Calendar, User, GraduationCap, Search,
-  ChevronLeft, ChevronRight, CheckCircle2,
+  ChevronLeft, ChevronRight, ChevronDown, CheckCircle2,
   Banknote, Receipt, AlertTriangle
 } from "lucide-react";
 import { db } from "../../../utils/supabase/client";
 import { toast } from "sonner";
 
 /* ─── Types ────────────────────────────────────────────────── */
-interface Kelas       { id: string; nama_kelas: string }
-interface Siswa       { id: string; nama: string; nis: string; kelas_id: string }
+interface Kelas       { id: string; nama_kelas: string; wali_kelas?: string | null; jurusan?: string | null }
+interface Siswa       { id: string; nama: string; nis: string; kelas_id: string | null }
 interface Tagihan     { id: string; kegiatan_id: string; nama_kegiatan: string; nominal: number; batas_pembayaran: string; total_dibayar: number; sisa_bayar: number; status: string }
 interface Pembayaran  { id: string; tagihan_id: string; kegiatan_id: string; siswa_id: string; jumlah: number; tanggal_pembayaran: string; bukti_pembayaran?: string; metode_pembayaran?: string; dicatat_oleh?: string; siswa?: { id: string; nama: string; nis: string; kelas_id: string }; kegiatan?: { id: string; nama_kegiatan: string; nominal: number } }
+interface SiswaTagihanSummary extends Siswa { tagihan: Tagihan[]; totalTagihan: number; totalTerbayar: number; totalSisa: number; isLunas: boolean; firstUnpaid?: Tagihan }
+
+interface KelasSummary { siswa: SiswaTagihanSummary[]; totalSiswa: number; totalLunas: number; totalBelumLunas: number }
 
 /* ─── Helpers ──────────────────────────────────────────────── */
 const PAGE_SIZE = 20;
@@ -81,20 +84,21 @@ function StatusBadge({ lunas }: { lunas: boolean }) {
 export default function Tagihan() {
   /* state */
   const [kelas,          setKelas]          = useState<Kelas[]>([]);
-  const [siswaList,      setSiswaList]      = useState<Siswa[]>([]);
   const [tagihanList,    setTagihanList]    = useState<Tagihan[]>([]);
   const [pembayaranList, setPembayaranList] = useState<Pembayaran[]>([]);
   const [loading,        setLoading]        = useState(true);
+  const [loadingKelasId,  setLoadingKelasId] = useState<string | null>(null);
+  const [kelasSummaries,  setKelasSummaries] = useState<Record<string, KelasSummary>>({});
 
   const [dialogOpen,        setDialogOpen]        = useState(false);
   const [editingPembayaran, setEditingPembayaran] = useState<Pembayaran | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId,    setDeleteTargetId]    = useState<string | null>(null);
 
-  const [selectedKelas,   setSelectedKelas]   = useState("");
+  const [expandedKelasId,  setExpandedKelasId]  = useState<string | null>(null);
   const [selectedSiswa,   setSelectedSiswa]   = useState("");
   const [selectedKegiatan, setSelectedKegiatan] = useState("");
-  const [searchSiswa,     setSearchSiswa]     = useState("");
+  const [searchKelas,     setSearchKelas]     = useState("");
 
   const [jumlahBayar,      setJumlahBayar]      = useState("");
   const [keterangan,       setKeterangan]       = useState("");
@@ -108,20 +112,6 @@ export default function Tagihan() {
   /* effects */
   useEffect(() => { fetchKelas(); }, []);
 
-  useEffect(() => {
-    if (selectedKelas) { fetchSiswaByKelas(selectedKelas); setSelectedSiswa(""); }
-    else { setSiswaList([]); setTagihanList([]); setPembayaranList([]); }
-  }, [selectedKelas]);
-
-  useEffect(() => {
-    if (selectedSiswa && selectedKelas) {
-      fetchTagihan(selectedSiswa);
-      fetchPembayaran(selectedSiswa);
-      tagihanPag.reset();
-      pembayaranPag.reset();
-    }
-  }, [selectedSiswa]);
-
   /* fetchers */
   const fetchKelas = async () => {
     try {
@@ -129,11 +119,6 @@ export default function Tagihan() {
       if (error) { toast.error("Gagal memuat kelas: " + error.message); return; }
       setKelas(data || []);
     } finally { setLoading(false); }
-  };
-
-  const fetchSiswaByKelas = async (kelasId: string) => {
-    const { data } = await db.getSiswaWithKelas();
-    setSiswaList((data || []).filter((s: any) => s.kelas_id === kelasId));
   };
 
   const fetchTagihan = async (siswaId: string) => {
@@ -147,6 +132,89 @@ export default function Tagihan() {
     if (error) { console.error("Error pembayaran:", error); return; }
     setPembayaranList(data || []);
   };
+
+  const loadKelasStudents = async (kelasId: string, force = false) => {
+    if (!force && kelasSummaries[kelasId]) return kelasSummaries[kelasId];
+
+    setLoadingKelasId(kelasId);
+    try {
+      const { data, error } = await db.getSiswaWithKelas();
+      if (error) {
+        toast.error("Gagal memuat siswa: " + error.message);
+        return null;
+      }
+
+      const siswaKelas = (data || []).filter((s: any) => s.kelas_id === kelasId);
+      const siswaSummary = await Promise.all(
+        siswaKelas.map(async (siswa: any) => {
+          const { data: tagihanData, error: tagihanError } = await db.getTagihanBySiswaId(siswa.id);
+          if (tagihanError) {
+            console.error("Error tagihan siswa:", tagihanError);
+          }
+
+          const tagihan = tagihanData || [];
+          const totalTagihan = tagihan.reduce((sum, item) => sum + (item.nominal || 0), 0);
+          const totalTerbayar = tagihan.reduce((sum, item) => sum + (item.total_dibayar || 0), 0);
+          const totalSisa = tagihan.reduce((sum, item) => sum + (item.sisa_bayar || 0), 0);
+          const firstUnpaid = tagihan.find((item) => item.sisa_bayar > 0);
+
+          return {
+            ...siswa,
+            tagihan,
+            totalTagihan,
+            totalTerbayar,
+            totalSisa,
+            isLunas: totalSisa === 0,
+            firstUnpaid,
+          } as SiswaTagihanSummary;
+        })
+      );
+
+      const summary: KelasSummary = {
+        siswa: siswaSummary,
+        totalSiswa: siswaSummary.length,
+        totalLunas: siswaSummary.filter((item) => item.isLunas).length,
+        totalBelumLunas: siswaSummary.filter((item) => !item.isLunas).length,
+      };
+
+      setKelasSummaries((prev) => ({ ...prev, [kelasId]: summary }));
+      return summary;
+    } finally {
+      setLoadingKelasId((current) => (current === kelasId ? null : current));
+    }
+  };
+
+  const refreshSelectedStudent = async (siswaId: string) => {
+    await Promise.all([fetchTagihan(siswaId), fetchPembayaran(siswaId)]);
+    tagihanPag.reset();
+    pembayaranPag.reset();
+  };
+
+  const handleToggleKelas = async (kelasId: string) => {
+    if (expandedKelasId === kelasId) {
+      setExpandedKelasId(null);
+      return;
+    }
+
+    setExpandedKelasId(kelasId);
+    await loadKelasStudents(kelasId);
+  };
+
+  const handlePayStudent = async (kelasId: string, siswa: SiswaTagihanSummary) => {
+    const tagihan = siswa.firstUnpaid || siswa.tagihan.find((item) => item.sisa_bayar > 0);
+    if (!tagihan) {
+      toast.info("Semua tagihan siswa ini sudah lunas");
+      return;
+    }
+
+    setExpandedKelasId(kelasId);
+    setSelectedSiswa(siswa.id);
+    setSelectedKegiatan(tagihan.kegiatan_id);
+    await refreshSelectedStudent(siswa.id);
+    handleOpenDialog(tagihan.kegiatan_id, tagihan.sisa_bayar);
+  };
+
+  const selectedStudentData = expandedKelasId ? kelasSummaries[expandedKelasId]?.siswa.find((siswa) => siswa.id === selectedSiswa) : undefined;
 
   /* dialog */
   const handleOpenDialog = (kegiatanId: string, sisaBayar: number, pembayaran?: Pembayaran) => {
@@ -208,7 +276,12 @@ export default function Tagihan() {
     try {
       const { error } = await db.deletePembayaran(deleteTargetId);
       if (error) throw new Error(error.message);
-      await Promise.all([fetchTagihan(selectedSiswa), fetchPembayaran(selectedSiswa)]);
+      if (selectedSiswa) {
+        await refreshSelectedStudent(selectedSiswa);
+      }
+      if (expandedKelasId) {
+        await loadKelasStudents(expandedKelasId, true);
+      }
       toast.success("✅ Pembayaran dihapus");
       setDeleteConfirmOpen(false);
       setDeleteTargetId(null);
@@ -218,11 +291,12 @@ export default function Tagihan() {
   };
 
   /* derived */
-  const filteredSiswa     = siswaList.filter((s) => {
-    const q = searchSiswa.toLowerCase().trim();
-    return !q || s.nama.toLowerCase().includes(q) || s.nis.toLowerCase().includes(q);
+  const filteredKelas     = kelas.filter((item) => {
+    const q = searchKelas.toLowerCase().trim();
+    return !q || item.nama_kelas.toLowerCase().includes(q) || (item.wali_kelas || "").toLowerCase().includes(q) || (item.jurusan || "").toLowerCase().includes(q);
   });
-  const selectedSiswaData = siswaList.find((s) => s.id === selectedSiswa);
+
+  const currentClassSummary = expandedKelasId ? kelasSummaries[expandedKelasId] : undefined;
   const totalTagihan      = tagihanList.reduce((sum, t) => sum + t.nominal,      0);
   const totalTerbayar     = tagihanList.reduce((sum, t) => sum + t.total_dibayar, 0);
   const totalSisa         = tagihanList.reduce((sum, t) => sum + t.sisa_bayar,   0);
@@ -257,108 +331,150 @@ export default function Tagihan() {
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-5 space-y-5">
 
-        {/* ── Filter Card ────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
-            <User className="w-4 h-4 text-blue-500" /> Pilih Siswa
+            <GraduationCap className="w-4 h-4 text-blue-500" /> Pilih Kelas
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Kelas */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                <GraduationCap className="w-3.5 h-3.5" /> Kelas
-              </label>
-              <select
-                value={selectedKelas}
-                onChange={(e) => setSelectedKelas(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
-              >
-                <option value="">Pilih Kelas...</option>
-                {kelas.map((k) => <option key={k.id} value={k.id}>{k.nama_kelas}</option>)}
-              </select>
-            </div>
-
-            {/* Siswa */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5" /> Nama Siswa
-              </label>
-              <select
-                value={selectedSiswa}
-                onChange={(e) => setSelectedSiswa(e.target.value)}
-                disabled={!selectedKelas}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <option value="">Pilih siswa...</option>
-                {filteredSiswa.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nama} ({s.nis})</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Search */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
-                <Search className="w-3.5 h-3.5" /> Cari Siswa
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchSiswa}
-                  onChange={(e) => setSearchSiswa(e.target.value)}
-                  placeholder="Nama atau NIS siswa..."
-                  disabled={!selectedKelas}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
-            </div>
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchKelas}
+              onChange={(e) => setSearchKelas(e.target.value)}
+              placeholder="Cari kelas, jurusan, atau wali kelas..."
+              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:bg-white transition-all"
+            />
           </div>
+        </div>
 
-          {/* Search results dropdown */}
-          {selectedKelas && searchSiswa && (
-            <div className="mt-3">
-              {filteredSiswa.length > 0 ? (
-                <div className="border border-blue-100 rounded-xl bg-blue-50 p-3">
-                  <p className="text-xs font-semibold text-blue-600 mb-2">
-                    {filteredSiswa.length} siswa ditemukan
-                  </p>
-                  <div className="space-y-1 max-h-36 overflow-y-auto">
-                    {filteredSiswa.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => { setSelectedSiswa(s.id); setSearchSiswa(""); }}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-white hover:bg-blue-100 border border-blue-100 hover:border-blue-300 transition-colors"
-                      >
-                        <div className="text-sm font-semibold text-slate-800">{s.nama}</div>
-                        <div className="text-xs text-slate-400">{s.nis}</div>
-                      </button>
-                    ))}
+        {/* ── Class List ────────────────────────────────────── */}
+        <div className="grid grid-cols-1 gap-4">
+          {filteredKelas.map((item) => {
+            const summary = kelasSummaries[item.id];
+            const isExpanded = expandedKelasId === item.id;
+            const isLoadingClass = loadingKelasId === item.id;
+
+            return (
+              <div key={item.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => handleToggleKelas(item.id)}
+                  className="w-full px-5 py-4 flex items-center justify-between gap-4 text-left hover:bg-slate-50 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold text-slate-900 truncate">{item.nama_kelas}</h3>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        {summary?.totalSiswa ?? 0} siswa
+                      </span>
+                      {summary && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                          {summary.totalLunas} lunas
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-500 mt-1">
+                      {item.wali_kelas || "Wali kelas belum diisi"}
+                      {item.jurusan ? ` • ${item.jurusan}` : ""}
+                    </p>
                   </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  Tidak ada siswa yang cocok dengan <strong>"{searchSiswa}"</strong>
-                </div>
-              )}
-            </div>
-          )}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {isLoadingClass && <span className="text-xs text-slate-400">Memuat...</span>}
+                    <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="border-t border-slate-100">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-5 bg-slate-50 border-b border-slate-100">
+                      {[
+                        { label: "Total Siswa", value: summary?.totalSiswa ?? 0, color: "text-slate-900" },
+                        { label: "Lunas", value: summary?.totalLunas ?? 0, color: "text-emerald-700" },
+                        { label: "Belum Lunas", value: summary?.totalBelumLunas ?? 0, color: "text-amber-700" },
+                      ].map((stat) => (
+                        <div key={stat.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <p className="text-xs text-slate-500">{stat.label}</p>
+                          <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-slate-50 text-slate-500 uppercase text-xs tracking-wide">
+                          <tr>
+                            <th className="text-left px-5 py-3 font-semibold">Nama Siswa</th>
+                            <th className="text-left px-5 py-3 font-semibold">NIS</th>
+                            <th className="text-left px-5 py-3 font-semibold">Keterangan</th>
+                            <th className="text-left px-5 py-3 font-semibold">Status</th>
+                            <th className="text-right px-5 py-3 font-semibold">Aksi</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {(summary?.siswa || []).length > 0 ? summary!.siswa.map((siswa) => {
+                            const firstUnpaid = siswa.firstUnpaid || siswa.tagihan.find((item) => item.sisa_bayar > 0);
+
+                            return (
+                              <tr key={siswa.id} className="hover:bg-slate-50/70">
+                                <td className="px-5 py-4 font-semibold text-slate-900">{siswa.nama}</td>
+                                <td className="px-5 py-4 text-slate-600">{siswa.nis}</td>
+                                <td className="px-5 py-4 text-slate-600">
+                                  {siswa.isLunas
+                                    ? "Semua tagihan sudah dibayar"
+                                    : `${formatRupiah(siswa.totalSisa)} belum dibayar`}
+                                </td>
+                                <td className="px-5 py-4">
+                                  <StatusBadge lunas={siswa.isLunas} />
+                                </td>
+                                <td className="px-5 py-4 text-right">
+                                  {siswa.isLunas ? (
+                                    <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-semibold">
+                                      <CheckCircle2 className="w-3.5 h-3.5" /> Lunas
+                                    </span>
+                                  ) : firstUnpaid ? (
+                                    <Button
+                                      size="sm"
+                                      className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                                      onClick={() => handlePayStudent(item.id, siswa)}
+                                    >
+                                      Bayar
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">Tidak ada tagihan</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          }) : (
+                            <tr>
+                              <td colSpan={5} className="px-5 py-10 text-center text-slate-400">
+                                Belum ada siswa di kelas ini.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {/* ── Summary Strip (only when siswa selected) ──────── */}
-        {selectedSiswa && (
+        {selectedSiswa && selectedStudentData && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             {/* Student name bar */}
             <div className="px-5 py-3 bg-slate-900 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">
-                  {selectedSiswaData?.nama.charAt(0).toUpperCase()}
+                  {selectedStudentData.nama.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <p className="text-white font-semibold text-sm">{selectedSiswaData?.nama}</p>
-                  <p className="text-slate-400 text-xs">{selectedSiswaData?.nis}</p>
+                  <p className="text-white font-semibold text-sm">{selectedStudentData.nama}</p>
+                  <p className="text-slate-400 text-xs">{selectedStudentData.nis}</p>
                 </div>
               </div>
               <div className="text-right">
@@ -392,7 +508,7 @@ export default function Tagihan() {
         )}
 
         {/* ── Main Content ────────────────────────────────────── */}
-        {selectedSiswa ? (
+        {selectedSiswa && selectedStudentData ? (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
             {/* ── Tagihan List (left, 3 cols) ─────────────────── */}
@@ -584,9 +700,9 @@ export default function Tagihan() {
             <DialogTitle className="text-lg font-bold text-slate-900">
               {editingPembayaran ? "Edit Pembayaran" : "Input Pembayaran Baru"}
             </DialogTitle>
-            {selectedSiswaData && (
+            {selectedStudentData && (
               <DialogDescription className="text-sm text-blue-600 font-semibold flex items-center gap-1.5 mt-1">
-                <User className="w-4 h-4" /> {selectedSiswaData.nama}
+                <User className="w-4 h-4" /> {selectedStudentData.nama}
               </DialogDescription>
             )}
           </DialogHeader>
