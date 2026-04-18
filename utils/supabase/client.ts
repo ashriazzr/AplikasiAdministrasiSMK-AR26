@@ -75,6 +75,15 @@ export const supabase =
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const supabaseConfigErrorMessage = supabaseConfigError;
+export const isSupabaseConfigError = (value: unknown): boolean => {
+  if (typeof value === "string") return value.includes(supabaseConfigErrorMessage);
+  if (value instanceof Error) return value.message.includes(supabaseConfigErrorMessage);
+  if (typeof value === "object" && value !== null && "message" in value) {
+    const message = (value as { message?: unknown }).message;
+    return typeof message === "string" && message.includes(supabaseConfigErrorMessage);
+  }
+  return false;
+};
 
 export interface Kelas { id: string; nama_kelas?: string; tingkat: string; wali_kelas: string; kelas?: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
 export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; created_at: string; updated_at: string; }

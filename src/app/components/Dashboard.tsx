@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Users, GraduationCap, School, TrendingUp, DollarSign, AlertCircle, CheckCircle } from "lucide-react";
-import { db, Kelas, Siswa, KegiatanAdministrasi, Pembayaran } from "../../../utils/supabase/client";
+import { db, isSupabaseConfigured, isSupabaseConfigError, supabaseConfigErrorMessage } from "../../../utils/supabase/client";
 import { toast } from "sonner";
 
 interface Stats {
@@ -45,8 +45,15 @@ export default function Dashboard() {
   const [recentTransactions, setRecentTransactions] = useState<RecentTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [kelasData, setKelasData] = useState<any[]>([]);
+  const [configWarning, setConfigWarning] = useState<string>("");
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setConfigWarning(supabaseConfigErrorMessage);
+      setLoading(false);
+      return;
+    }
+
     fetchStats();
     fetchKelas();
     fetchCashflowData();
@@ -59,6 +66,10 @@ export default function Dashboard() {
       const { data: kelasData, error: kelasError } = await db.getKelas();
 
       if (siswaError || kelasError) {
+        if (isSupabaseConfigError(siswaError || kelasError)) {
+          setConfigWarning(supabaseConfigErrorMessage);
+          return;
+        }
         toast.error("Gagal memuat statistik: " + (siswaError?.message || kelasError?.message));
         return;
       }
@@ -87,6 +98,10 @@ export default function Dashboard() {
         siswaByGender,
       });
     } catch (error) {
+      if (isSupabaseConfigError(error)) {
+        setConfigWarning(supabaseConfigErrorMessage);
+        return;
+      }
       toast.error("Error fetching stats: " + (error instanceof Error ? error.message : "Unknown error"));
     }
   };
@@ -96,12 +111,20 @@ export default function Dashboard() {
       const { data, error } = await db.getKelas();
 
       if (error) {
+        if (isSupabaseConfigError(error)) {
+          setConfigWarning(supabaseConfigErrorMessage);
+          return;
+        }
         toast.error("Gagal memuat data kelas: " + error.message);
         return;
       }
 
       setKelasData(data || []);
     } catch (error) {
+      if (isSupabaseConfigError(error)) {
+        setConfigWarning(supabaseConfigErrorMessage);
+        return;
+      }
       toast.error("Error fetching kelas: " + (error instanceof Error ? error.message : "Unknown error"));
     }
   };
@@ -170,6 +193,10 @@ export default function Dashboard() {
             : 0,
       });
     } catch (error) {
+      if (isSupabaseConfigError(error)) {
+        setConfigWarning(supabaseConfigErrorMessage);
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Error fetching cashflow data");
     } finally {
       setLoading(false);
@@ -182,6 +209,10 @@ export default function Dashboard() {
       const { data: siswaData } = await db.getSiswa();
 
       if (error) {
+        if (isSupabaseConfigError(error)) {
+          setConfigWarning(supabaseConfigErrorMessage);
+          return;
+        }
         toast.error("Gagal memuat transaksi: " + error.message);
         return;
       }
@@ -207,6 +238,10 @@ export default function Dashboard() {
 
       setRecentTransactions(transactions);
     } catch (error) {
+      if (isSupabaseConfigError(error)) {
+        setConfigWarning(supabaseConfigErrorMessage);
+        return;
+      }
       toast.error("Error fetching recent transactions: " + (error instanceof Error ? error.message : "Unknown error"));
     }
   };
@@ -286,6 +321,13 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
         <p className="text-gray-500 mt-1">Laporan dan Statistik Administrasi Sekolah</p>
       </div>
+
+      {configWarning && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <p className="font-semibold">Konfigurasi Supabase belum lengkap</p>
+          <p className="text-sm mt-1">{configWarning}</p>
+        </div>
+      )}
 
       {/* Core Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

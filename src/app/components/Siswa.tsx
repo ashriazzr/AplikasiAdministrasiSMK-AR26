@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -7,9 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "./ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
-import { Plus, Edit, Trash2, Search, Users, School, CreditCard } from "lucide-react";
+import { Plus, Edit, Trash2, Search, Users, School, CreditCard, Upload } from "lucide-react";
 import { db, type Siswa as SiswaType, type Kelas as KelasType } from "../../../utils/supabase/client";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 interface Siswa extends SiswaType {}
 
@@ -27,6 +28,8 @@ export default function Siswa() {
   const [editingRFIDSiswa, setEditingRFIDSiswa] = useState<Siswa | null>(null);
   const [newRFIDValue, setNewRFIDValue] = useState("");
   const [isUpdatingRFID, setIsUpdatingRFID] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [formData, setFormData] = useState({
     nama: "",
     kelas_id: "",
@@ -206,6 +209,151 @@ export default function Siswa() {
     return kelas?.nama_kelas || "-";
   };
 
+  const normalizeKey = (key: string) =>
+    key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const pickValue = (row: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+      const val = row[key];
+      if (val !== undefined && val !== null && String(val).trim() !== "") return String(val).trim();
+    }
+    return "";
+  };
+
+  const toDateYmd = (value: unknown) => {
+    if (typeof value === "number") {
+      const parsed = XLSX.SSF.parse_date_code(value);
+      if (!parsed) return "";
+      const mm = String(parsed.m).padStart(2, "0");
+      const dd = String(parsed.d).padStart(2, "0");
+      return `${parsed.y}-${mm}-${dd}`;
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString().split("T")[0];
+    }
+
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+    const ddmmyyyy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (ddmmyyyy) {
+      const dd = ddmmyyyy[1].padStart(2, "0");
+      const mm = ddmmyyyy[2].padStart(2, "0");
+      const yyyy = ddmmyyyy[3];
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    const parsed = new Date(raw);
+    if (!isNaN(parsed.getTime())) return parsed.toISOString().split("T")[0];
+    return "";
+  };
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (kelasList.length === 0) {
+      toast.error("Data kelas belum tersedia. Tambahkan kelas terlebih dahulu.");
+      e.target.value = "";
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+
+      if (rawRows.length === 0) {
+        toast.error("File Excel kosong atau tidak memiliki data.");
+        return;
+      }
+
+      const kelasById = new Set(kelasList.map((k) => k.id));
+      const kelasByName = new Map(kelasList.map((k) => [String(k.nama_kelas || "").toLowerCase(), k.id]));
+
+      let successCount = 0;
+      const failures: string[] = [];
+
+      for (let i = 0; i < rawRows.length; i++) {
+        const normalizedRow: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(rawRows[i])) {
+          normalizedRow[normalizeKey(key)] = val;
+        }
+
+        const nama = pickValue(normalizedRow, ["nama", "namalengkap"]);
+        const nis = pickValue(normalizedRow, ["nis"]);
+        const nisn = pickValue(normalizedRow, ["nisn"]);
+        const jenisKelaminRaw = pickValue(normalizedRow, ["jeniskelamin", "gender"]);
+        const tanggalLahir = toDateYmd(normalizedRow["tanggallahir"] ?? normalizedRow["tglahir"]);
+        const alamat = pickValue(normalizedRow, ["alamat"]);
+        const asalSekolah = pickValue(normalizedRow, ["asalsekolah", "asalsekolahasal"]);
+        const rfidCard = pickValue(normalizedRow, ["rfid", "rfidcard", "uidrfid"]);
+
+        const kelasIdInput = pickValue(normalizedRow, ["kelasid"]);
+        const kelasNameInput = pickValue(normalizedRow, ["kelas", "namakelas"]);
+
+        let kelasId = "";
+        if (kelasIdInput && kelasById.has(kelasIdInput)) {
+          kelasId = kelasIdInput;
+        } else if (kelasNameInput) {
+          kelasId = kelasByName.get(kelasNameInput.toLowerCase()) || "";
+        }
+
+        const jenisKelamin = /^l(aki)?/i.test(jenisKelaminRaw)
+          ? "Laki-laki"
+          : /^p(erempuan)?/i.test(jenisKelaminRaw)
+            ? "Perempuan"
+            : "";
+
+        if (!nama || !nis || !nisn || !kelasId || !jenisKelamin || !tanggalLahir || !alamat || !asalSekolah) {
+          failures.push(`Baris ${i + 2}: data wajib tidak lengkap`);
+          continue;
+        }
+
+        const { error } = await db.createSiswa({
+          nama,
+          kelas_id: kelasId,
+          nis,
+          nisn,
+          jenis_kelamin: jenisKelamin,
+          tanggal_lahir: tanggalLahir,
+          alamat,
+          asal_sekolah: asalSekolah,
+          rfid_card: rfidCard,
+        });
+
+        if (error) {
+          failures.push(`Baris ${i + 2}: ${error.message}`);
+          continue;
+        }
+
+        successCount++;
+      }
+
+      if (successCount > 0) {
+        toast.success(`Impor selesai. ${successCount} data siswa berhasil ditambahkan.`);
+        await fetchSiswa();
+      }
+
+      if (failures.length > 0) {
+        toast.error(`Ada ${failures.length} data gagal diimpor. Cek format kolom dan data kelas.`);
+        console.error("Detail gagal impor siswa:", failures);
+      }
+    } catch (error) {
+      console.error("Error importing siswa excel:", error);
+      toast.error("Gagal membaca file Excel.");
+    } finally {
+      setIsImporting(false);
+      e.target.value = "";
+    }
+  };
+
   const filteredSiswa = siswaList.filter((siswa) => {
     const matchSearch = 
       siswa.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -240,16 +388,33 @@ export default function Siswa() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Daftar Siswa</CardTitle>
-                <Dialog open={dialogOpen} onOpenChange={(open) => {
-                  setDialogOpen(open);
-                  if (!open) resetForm();
-                }}>
-                  <DialogTrigger asChild>
-                    <Button className="bg-blue-600 hover:bg-blue-700">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Tambah Siswa
-                    </Button>
-                  </DialogTrigger>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={handleImportExcel}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {isImporting ? "Mengimpor..." : "Impor Excel"}
+                  </Button>
+
+                  <Dialog open={dialogOpen} onOpenChange={(open) => {
+                    setDialogOpen(open);
+                    if (!open) resetForm();
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-blue-600 hover:bg-blue-700">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Tambah Siswa
+                      </Button>
+                    </DialogTrigger>
                   <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>
@@ -369,6 +534,7 @@ export default function Siswa() {
                     </form>
                   </DialogContent>
                 </Dialog>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
