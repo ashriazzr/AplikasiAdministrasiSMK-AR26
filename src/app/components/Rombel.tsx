@@ -202,16 +202,22 @@ export default function Rombel() {
   const handleKelasSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const payload = {
+      ...kelasForm,
+      nama_kelas: `${kelasForm.kelas || kelasForm.tingkat} ${kelasForm.jurusan}`.trim(),
+      tingkat: kelasForm.tingkat || kelasForm.kelas,
+    };
+
     try {
       if (editingKelas) {
-        const { error } = await db.updateKelas(editingKelas.id, kelasForm);
+        const { error } = await db.updateKelas(editingKelas.id, payload);
         if (error) {
           toast.error("Gagal menyimpan: " + error.message);
           return;
         }
         toast.success("Data kelas diperbarui");
       } else {
-        const { error } = await db.createKelas(kelasForm);
+        const { error } = await db.createKelas(payload);
         if (error) {
           toast.error("Gagal menyimpan: " + error.message);
           return;
@@ -244,11 +250,11 @@ export default function Rombel() {
     if (kelas) {
       setEditingKelas(kelas);
       setKelasForm({
-        kelas: kelas.kelas || "",
+        kelas: kelas.kelas || kelas.tingkat || "",
         jurusan: kelas.jurusan || "",
         tahun_ajaran: kelas.tahun_ajaran || "",
         wali_kelas: kelas.wali_kelas,
-        tingkat: kelas.tingkat,
+        tingkat: kelas.tingkat || kelas.kelas || "",
       });
     } else {
       resetKelasForm();

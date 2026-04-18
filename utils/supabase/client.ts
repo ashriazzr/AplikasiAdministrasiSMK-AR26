@@ -114,8 +114,17 @@ export interface PembayaranWithDetails extends Pembayaran { siswa?: Siswa & { ke
 export const db = {
   async getKelas() { return supabase.from("kelas").select("*").order("nama_kelas"); },
   async getKelasById(id: string) { return supabase.from("kelas").select("*").eq("id", id).single(); },
-  async createKelas(kelas: Omit<Kelas, "id" | "created_at" | "updated_at">) { return supabase.from("kelas").insert([kelas]).select().single(); },
-  async updateKelas(id: string, kelas: Partial<Kelas>) { return supabase.from("kelas").update(kelas).eq("id", id).select().single(); },
+  async createKelas(kelas: Omit<Kelas, "id" | "created_at" | "updated_at">) {
+    const namaKelas = (kelas.nama_kelas || `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""}`).trim();
+    const payload = { ...kelas, nama_kelas: namaKelas, tingkat: kelas.tingkat || kelas.kelas || "" };
+    return supabase.from("kelas").insert([payload]).select().single();
+  },
+  async updateKelas(id: string, kelas: Partial<Kelas>) {
+    const shouldBuildNamaKelas = !kelas.nama_kelas && (kelas.kelas || kelas.tingkat || kelas.jurusan);
+    const namaKelas = shouldBuildNamaKelas ? `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""}`.trim() : kelas.nama_kelas;
+    const payload = { ...kelas, nama_kelas: namaKelas, tingkat: kelas.tingkat || kelas.kelas || kelas.tingkat };
+    return supabase.from("kelas").update(payload).eq("id", id).select().single();
+  },
   async deleteKelas(id: string) { const { error } = await supabase.from("kelas").delete().eq("id", id); return { error }; },
 
   async getSiswa() { return supabase.from("siswa").select("*").order("nama"); },
