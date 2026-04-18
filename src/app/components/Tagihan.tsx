@@ -27,6 +27,7 @@ interface SiswaTagihanSummary {
   total_tagihan: number;
   total_terbayar: number;
   total_sisa: number;
+  belum_lunas_items: Array<{ nama_kegiatan: string; sisa_bayar: number }>;
 }
 
 /* ─── Helpers ──────────────────────────────────────────────── */
@@ -160,41 +161,31 @@ export default function Tagihan() {
   const fetchSiswaSummaryByKelas = async (kelasId: string) => {
     setSummaryLoading(true);
     try {
-      const [siswaRes, tagihanRes, pembayaranRes] = await Promise.all([
-        db.getSiswaWithKelas(),
-        db.getTagihan(),
-        db.getPembayaran(),
-      ]);
+      const siswaRes = await db.getSiswaWithKelas();
 
       const siswaKelas = ((siswaRes.data || []) as any[]).filter((s) => s.kelas_id === kelasId);
-      const semuaTagihan = (tagihanRes.data || []) as any[];
-      const semuaPembayaran = (pembayaranRes.data || []) as any[];
 
-      const bayarByTagihan = new Map<string, number>();
-      for (const p of semuaPembayaran) {
-        const key = p.tagihan_id;
-        if (!key) continue;
-        const current = bayarByTagihan.get(key) || 0;
-        bayarByTagihan.set(key, current + Number(p.jumlah || p.jumlah_bayar || 0));
-      }
+      const summaryRows: SiswaTagihanSummary[] = await Promise.all(
+        siswaKelas.map(async (siswa) => {
+          const tagihanRes = await db.getTagihanBySiswaId(siswa.id);
+          const tagihanSiswa = (tagihanRes.data || []) as Tagihan[];
+          const belumLunasItems = tagihanSiswa
+            .filter((t) => Number(t.sisa_bayar || 0) > 0)
+            .map((t) => ({ nama_kegiatan: t.nama_kegiatan, sisa_bayar: Number(t.sisa_bayar || 0) }));
 
-      const summaryRows: SiswaTagihanSummary[] = siswaKelas.map((siswa) => {
-        const tagihanSiswa = semuaTagihan.filter((t) => t.siswa_id === siswa.id);
-        const totalTagihan = tagihanSiswa.reduce((sum, t) => sum + Number(t.jumlah || 0), 0);
-        const totalTerbayar = tagihanSiswa.reduce((sum, t) => sum + (bayarByTagihan.get(t.id) || 0), 0);
-        const jumlahLunas = tagihanSiswa.filter((t) => (bayarByTagihan.get(t.id) || 0) >= Number(t.jumlah || 0)).length;
-
-        return {
-          siswa_id: siswa.id,
-          nama: siswa.nama,
-          nis: siswa.nis,
-          jumlah_tagihan: tagihanSiswa.length,
-          jumlah_lunas: jumlahLunas,
-          total_tagihan: totalTagihan,
-          total_terbayar: totalTerbayar,
-          total_sisa: Math.max(0, totalTagihan - totalTerbayar),
-        };
-      });
+          return {
+            siswa_id: siswa.id,
+            nama: siswa.nama,
+            nis: siswa.nis,
+            jumlah_tagihan: tagihanSiswa.length,
+            jumlah_lunas: tagihanSiswa.filter((t) => Number(t.sisa_bayar || 0) === 0).length,
+            total_tagihan: tagihanSiswa.reduce((sum, t) => sum + Number(t.nominal || 0), 0),
+            total_terbayar: tagihanSiswa.reduce((sum, t) => sum + Number(t.total_dibayar || 0), 0),
+            total_sisa: tagihanSiswa.reduce((sum, t) => sum + Number(t.sisa_bayar || 0), 0),
+            belum_lunas_items: belumLunasItems,
+          };
+        })
+      );
 
       setSiswaSummary(summaryRows);
     } finally {
@@ -438,9 +429,28 @@ export default function Tagihan() {
                           <td className="px-4 py-3 font-semibold text-emerald-700">{formatRupiah(row.total_terbayar)}</td>
                           <td className="px-4 py-3 font-semibold text-amber-700">{formatRupiah(row.total_sisa)}</td>
                           <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${lunas ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                              {lunas ? "Lunas" : `Lunas ${row.jumlah_lunas}/${row.jumlah_tagihan}`}
-                            </span>
+                            {lunas ? (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+                                Semua kegiatan lunas
+                              </span>
+                            ) : (
+                              <details className="group">
+                                <summary className="cursor-pointer list-none inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                                  {`Lunas ${row.jumlah_lunas}/${row.jumlah_tagihan} • ${row.belum_lunas_items.length} belum lunas`}
+                                </summary>
+                                <div className="mt-2 p-2.5 rounded-lg border border-amber-200 bg-amber-50 space-y-1.5 min-w-[230px]">
+                                  {row.belum_lunas_items.slice(0, 4).map((item, idx) => (
+                                    <div key={`${item.nama_kegiatan}-${idx}`} className="flex items-start justify-between gap-2 text-xs">
+                                      <span className="text-slate-700">{item.nama_kegiatan}</span>
+                                      <span className="font-semibold text-amber-700 whitespace-nowrap">{formatRupiah(item.sisa_bayar)}</span>
+                                    </div>
+                                  ))}
+                                  {row.belum_lunas_items.length > 4 && (
+                                    <p className="text-[11px] text-slate-500">+{row.belum_lunas_items.length - 4} kegiatan lainnya</p>
+                                  )}
+                                </div>
+                              </details>
+                            )}
                           </td>
                         </tr>
                       );
