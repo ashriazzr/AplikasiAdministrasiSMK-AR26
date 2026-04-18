@@ -106,6 +106,76 @@ export default function Cashflow() {
       setTxOpen(false); await loadActivityData(selKegId);
     } catch { toast.error("Gagal menyimpan catatan"); }
   };
+
+  const handleDeleteTx = async (id: string, kegiatanId: string) => {
+    if (!confirm("Hapus transaksi ini?")) return;
+    const { error } = await db.deletePengeluaran(id);
+    if (error) { toast.error("Gagal menghapus"); return; }
+    toast.success("Transaksi dihapus");
+    await loadActivityData(kegiatanId);
+  };
+
+  const exportKegiatan = (kegiatanId: string) => {
+    const kg = kegiatan.find(k => k.id === kegiatanId);
+    const s = summaries[kegiatanId];
+    if (!s) return;
+
+    const rows = [
+      ...s.pembayaranList.map(p => ({
+        Tanggal: fmtDate(p.tanggal_pembayaran),
+        Jenis: "Pemasukan",
+        Keterangan: `Pembayaran - ${p.siswa?.nama ?? "-"}`,
+        Nominal: p.jumlah,
+      })),
+      ...s.pengeluaranList.map(p => ({
+        Tanggal: fmtDate(p.tanggal),
+        Jenis: p.keterangan === "income" ? "Pemasukan" : "Pengeluaran",
+        Keterangan: p.deskripsi || "-",
+        Nominal: p.jumlah,
+      })),
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cashflow");
+    XLSX.writeFile(wb, `Cashflow_${kg?.nama_kegiatan ?? kegiatanId}_${new Date().toISOString().split("T")[0]}.xlsx`);
+    toast.success("File Excel diunduh");
+  };
+
+  const handleSaveCat = async () => {
+    if (!catForm.nama_kategori.trim()) { toast.error("Nama kategori wajib diisi"); return; }
+    try {
+      if (editingCat) {
+        const { error } = await db.updateKategori(editingCat.id, catForm);
+        if (error) throw error;
+        toast.success("Kategori diperbarui");
+      } else {
+        const { error } = await db.createKategori(catForm);
+        if (error) throw error;
+        toast.success("Kategori ditambahkan");
+      }
+
+      const res = await db.getKategori();
+      setCategories((res.data as Kategori[]) || []);
+      setEditingCat(null);
+      setCatForm({ nama_kategori: "", jenis: "expense", warna: "#10b981", icon: "tag", urutan: 0 });
+    } catch {
+      toast.error("Gagal menyimpan kategori");
+    }
+  };
+
+  const handleDeleteCat = async (id: string) => {
+    if (!confirm("Hapus kategori ini?")) return;
+    const { error } = await db.deleteKategori(id);
+    if (error) { toast.error("Gagal menghapus"); return; }
+    const res = await db.getKategori();
+    setCategories((res.data as Kategori[]) || []);
+    toast.success("Kategori dihapus");
+  };
+
+  const detailKg = kegiatan.find(k => k.id === detailKegId);
+  const detailSumm = summaries[detailKegId];
+
   return (
     <LayoutWrapper title="Cashflow" subtitle="Detail pemasukan dan pengeluaran kegiatan">
       <PageSection>
