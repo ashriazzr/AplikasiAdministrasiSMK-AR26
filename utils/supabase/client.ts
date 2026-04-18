@@ -85,6 +85,26 @@ export const isSupabaseConfigError = (value: unknown): boolean => {
   return false;
 };
 
+const isMissingColumnsInSchemaCache = (error: unknown, columns: string[]): boolean => {
+  const message =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message?: unknown }).message || "")
+          : "";
+
+  const normalized = message.toLowerCase();
+  return normalized.includes("schema cache") && columns.some((column) => normalized.includes(`'${column.toLowerCase()}' column`));
+};
+
+const deriveLegacyTingkat = (namaKelas: string): string => {
+  const token = namaKelas.trim().split(/\s+/)[0]?.toUpperCase() || "";
+  if (token === "X" || token === "XI" || token === "XII") return token;
+  return namaKelas.trim() || "X";
+};
+
 export interface Kelas { id: string; nama_kelas?: string; wali_kelas: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
 export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; created_at: string; updated_at: string; }
 export interface Administrasi { id: string; user_id?: string; nama: string; email: string; jabatan: string; telepon: string; tanggal_bergabung: string; created_at: string; updated_at: string; }
@@ -121,7 +141,19 @@ export const db = {
       tahun_ajaran: (kelas.tahun_ajaran || "").trim(),
       wali_kelas: kelas.wali_kelas,
     };
-    return supabase.from("kelas").insert([payload]).select().single();
+
+    const legacyPayload = {
+      ...payload,
+      tingkat: deriveLegacyTingkat(payload.nama_kelas),
+      kelas: deriveLegacyTingkat(payload.nama_kelas),
+    };
+
+    let result = await supabase.from("kelas").insert([legacyPayload]).select().single();
+    if (result.error && isMissingColumnsInSchemaCache(result.error, ["tingkat", "kelas"])) {
+      result = await supabase.from("kelas").insert([payload]).select().single();
+    }
+
+    return result;
   },
   async updateKelas(id: string, kelas: Partial<Kelas>) {
     const payload = {
@@ -130,7 +162,18 @@ export const db = {
       ...(kelas.tahun_ajaran !== undefined ? { tahun_ajaran: kelas.tahun_ajaran.trim() } : {}),
       ...(kelas.wali_kelas !== undefined ? { wali_kelas: kelas.wali_kelas } : {}),
     };
-    return supabase.from("kelas").update(payload).eq("id", id).select().single();
+
+    const legacyPatch = {
+      ...payload,
+      ...(payload.nama_kelas ? { tingkat: deriveLegacyTingkat(payload.nama_kelas), kelas: deriveLegacyTingkat(payload.nama_kelas) } : {}),
+    };
+
+    let result = await supabase.from("kelas").update(legacyPatch).eq("id", id).select().single();
+    if (result.error && isMissingColumnsInSchemaCache(result.error, ["tingkat", "kelas"])) {
+      result = await supabase.from("kelas").update(payload).eq("id", id).select().single();
+    }
+
+    return result;
   },
   async deleteKelas(id: string) { const { error } = await supabase.from("kelas").delete().eq("id", id); return { error }; },
 
