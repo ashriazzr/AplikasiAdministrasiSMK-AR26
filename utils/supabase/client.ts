@@ -85,6 +85,20 @@ export const isSupabaseConfigError = (value: unknown): boolean => {
   return false;
 };
 
+const isMissingNomorKelasColumnError = (error: unknown): boolean => {
+  const message =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message?: unknown }).message || "")
+          : "";
+
+  const normalized = message.toLowerCase();
+  return normalized.includes("nomor_kelas") && normalized.includes("schema cache");
+};
+
 export interface Kelas { id: string; nama_kelas?: string; tingkat: string; wali_kelas: string; kelas?: string; jurusan?: string; nomor_kelas?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
 export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; created_at: string; updated_at: string; }
 export interface Administrasi { id: string; user_id?: string; nama: string; email: string; jabatan: string; telepon: string; tanggal_bergabung: string; created_at: string; updated_at: string; }
@@ -117,13 +131,29 @@ export const db = {
   async createKelas(kelas: Omit<Kelas, "id" | "created_at" | "updated_at">) {
     const namaKelas = (kelas.nama_kelas || `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""} ${kelas.nomor_kelas || ""}`).trim();
     const payload = { ...kelas, nama_kelas: namaKelas, tingkat: kelas.tingkat || kelas.kelas || "" };
-    return supabase.from("kelas").insert([payload]).select().single();
+
+    let result = await supabase.from("kelas").insert([payload]).select().single();
+    if (result.error && isMissingNomorKelasColumnError(result.error)) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.nomor_kelas;
+      result = await supabase.from("kelas").insert([fallbackPayload]).select().single();
+    }
+
+    return result;
   },
   async updateKelas(id: string, kelas: Partial<Kelas>) {
     const shouldBuildNamaKelas = !kelas.nama_kelas && (kelas.kelas || kelas.tingkat || kelas.jurusan || kelas.nomor_kelas);
     const namaKelas = shouldBuildNamaKelas ? `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""} ${kelas.nomor_kelas || ""}`.trim() : kelas.nama_kelas;
     const payload = { ...kelas, nama_kelas: namaKelas, tingkat: kelas.tingkat || kelas.kelas || kelas.tingkat };
-    return supabase.from("kelas").update(payload).eq("id", id).select().single();
+
+    let result = await supabase.from("kelas").update(payload).eq("id", id).select().single();
+    if (result.error && isMissingNomorKelasColumnError(result.error)) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.nomor_kelas;
+      result = await supabase.from("kelas").update(fallbackPayload).eq("id", id).select().single();
+    }
+
+    return result;
   },
   async deleteKelas(id: string) { const { error } = await supabase.from("kelas").delete().eq("id", id); return { error }; },
 
