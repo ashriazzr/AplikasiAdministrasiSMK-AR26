@@ -23,6 +23,7 @@ interface Kelas extends KelasType {
   siswaCount?: number;
   kelas?: string;
   jurusan?: string;
+  nomor_kelas?: string;
   tahun_ajaran?: string;
 }
 
@@ -74,6 +75,7 @@ export default function Rombel() {
   const [kelasForm, setKelasForm] = useState({
     kelas: "",
     jurusan: "",
+    nomor_kelas: "",
     tahun_ajaran: "",
     wali_kelas: "",
     tingkat: "",
@@ -330,7 +332,7 @@ export default function Rombel() {
 
     const payload = {
       ...kelasForm,
-      nama_kelas: `${kelasForm.kelas || kelasForm.tingkat} ${kelasForm.jurusan}`.trim(),
+      nama_kelas: `${kelasForm.kelas || kelasForm.tingkat} ${kelasForm.jurusan} ${kelasForm.nomor_kelas}`.trim(),
       tingkat: kelasForm.tingkat || kelasForm.kelas,
     };
 
@@ -378,6 +380,7 @@ export default function Rombel() {
       setKelasForm({
         kelas: kelas.kelas || kelas.tingkat || "",
         jurusan: kelas.jurusan || "",
+        nomor_kelas: kelas.nomor_kelas || "",
         tahun_ajaran: kelas.tahun_ajaran || "",
         wali_kelas: kelas.wali_kelas,
         tingkat: kelas.tingkat || kelas.kelas || "",
@@ -393,6 +396,7 @@ export default function Rombel() {
     setKelasForm({
       kelas: "",
       jurusan: "",
+      nomor_kelas: "",
       tahun_ajaran: "",
       wali_kelas: "",
       tingkat: "",
@@ -1489,6 +1493,19 @@ export default function Rombel() {
                 <option value="TKJ">TKJ (Teknik Komputer Jaringan)</option>
                 <option value="TKR">TKR (Teknik Kendaraan Ringan)</option>
               </select>
+            </div>
+
+            <div>
+              <Label>Nomor Kelas</Label>
+              <Input
+                type="text"
+                value={kelasForm.nomor_kelas}
+                onChange={(e) =>
+                  setKelasForm((p) => ({ ...p, nomor_kelas: e.target.value }))
+                }
+                placeholder="Contoh: 1, 2, A, B"
+                required
+              />
             </div>
 
             <div>

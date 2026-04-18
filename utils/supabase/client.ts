@@ -85,7 +85,7 @@ export const isSupabaseConfigError = (value: unknown): boolean => {
   return false;
 };
 
-export interface Kelas { id: string; nama_kelas?: string; tingkat: string; wali_kelas: string; kelas?: string; jurusan?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
+export interface Kelas { id: string; nama_kelas?: string; tingkat: string; wali_kelas: string; kelas?: string; jurusan?: string; nomor_kelas?: string; tahun_ajaran?: string; created_at: string; updated_at: string; }
 export interface Siswa { id: string; nama: string; kelas_id: string; nis: string; nisn: string; jenis_kelamin: string; tanggal_lahir: string; alamat: string; asal_sekolah: string; rfid_card: string; created_at: string; updated_at: string; }
 export interface Administrasi { id: string; user_id?: string; nama: string; email: string; jabatan: string; telepon: string; tanggal_bergabung: string; created_at: string; updated_at: string; }
 export interface Tagihan { id: string; siswa_id: string; kegiatan_id: string; jumlah: number; status: "pending" | "paid" | "overdue"; tanggal_jatuh_tempo: string; created_at: string; updated_at: string; }
@@ -115,13 +115,13 @@ export const db = {
   async getKelas() { return supabase.from("kelas").select("*").order("nama_kelas"); },
   async getKelasById(id: string) { return supabase.from("kelas").select("*").eq("id", id).single(); },
   async createKelas(kelas: Omit<Kelas, "id" | "created_at" | "updated_at">) {
-    const namaKelas = (kelas.nama_kelas || `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""}`).trim();
+    const namaKelas = (kelas.nama_kelas || `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""} ${kelas.nomor_kelas || ""}`).trim();
     const payload = { ...kelas, nama_kelas: namaKelas, tingkat: kelas.tingkat || kelas.kelas || "" };
     return supabase.from("kelas").insert([payload]).select().single();
   },
   async updateKelas(id: string, kelas: Partial<Kelas>) {
-    const shouldBuildNamaKelas = !kelas.nama_kelas && (kelas.kelas || kelas.tingkat || kelas.jurusan);
-    const namaKelas = shouldBuildNamaKelas ? `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""}`.trim() : kelas.nama_kelas;
+    const shouldBuildNamaKelas = !kelas.nama_kelas && (kelas.kelas || kelas.tingkat || kelas.jurusan || kelas.nomor_kelas);
+    const namaKelas = shouldBuildNamaKelas ? `${kelas.kelas || kelas.tingkat || ""} ${kelas.jurusan || ""} ${kelas.nomor_kelas || ""}`.trim() : kelas.nama_kelas;
     const payload = { ...kelas, nama_kelas: namaKelas, tingkat: kelas.tingkat || kelas.kelas || kelas.tingkat };
     return supabase.from("kelas").update(payload).eq("id", id).select().single();
   },
