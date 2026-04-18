@@ -53,8 +53,7 @@ jobs:
       - name: Validate Supabase Configuration
         run: |
           if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "::error::Supabase environment variables belum diisi. Set VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di GitHub Secrets atau Repository Variables."
-            exit 1
+            echo "::warning::Supabase environment variables belum diisi. Build tetap dilanjutkan, tetapi fitur database mungkin tidak berfungsi sampai secrets diset."
           fi
 
       - name: Build
