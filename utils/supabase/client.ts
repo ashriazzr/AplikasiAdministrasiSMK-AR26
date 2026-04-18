@@ -185,6 +185,7 @@ export const db = {
     const payload = {
       ...siswa,
       tanggal_lahir: siswa.tanggal_lahir ? siswa.tanggal_lahir : null,
+      rfid_card: siswa.rfid_card ? siswa.rfid_card : null,
     };
     return supabase.from("siswa").insert([payload]).select().single();
   },
@@ -193,6 +194,9 @@ export const db = {
       ...siswa,
       ...(siswa.tanggal_lahir !== undefined
         ? { tanggal_lahir: siswa.tanggal_lahir ? siswa.tanggal_lahir : null }
+        : {}),
+      ...(siswa.rfid_card !== undefined
+        ? { rfid_card: siswa.rfid_card ? siswa.rfid_card : null }
         : {}),
     };
     return supabase.from("siswa").update(payload).eq("id", id).select().single();
